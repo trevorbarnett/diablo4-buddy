@@ -1,0 +1,325 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { join } from 'node:path';
+import type { BuildConfig, CriticalItem, CriticalItemType, SlotPriority } from './types';
+
+const BUILD_JSON         = join(import.meta.dir, 'config', 'build.json');
+const FARMING_BUILD_JSON = join(import.meta.dir, 'config', 'farming-build.json');
+const client = new Anthropic();
+
+const D4_SLOTS = [
+  'Helm', 'Chest', 'Gloves', 'Pants', 'Boots',
+  'Amulet', 'Ring', 'Ring 1', 'Ring 2',
+  'Weapon', 'Offhand', 'Bludgeoning Weapon', 'Slashing Weapon',
+  'Dual-Wield Weapon', 'Two-Handed Weapon', 'Shield',
+];
+
+const KNOWN_AFFIXES = [
+  'Critical Strike Chance', 'Critical Strike Damage', 'Attack Speed',
+  'Movement Speed', 'Cooldown Reduction', 'Lucky Hit Chance',
+  'Maximum Life', 'Armor', 'Resistances', 'All Stats',
+  'Damage', 'Vulnerable Damage', 'Overpower Damage',
+  'Core Skill Damage', 'Ultimate Skill Damage', 'Basic Skill Damage',
+  'Skill Damage', 'Ranks to', 'Resource Cost Reduction',
+  'Dodge Chance', 'Damage Reduction', 'Barrier Generation',
+  'Healing Received', 'Thorns', 'Block Chance', 'Essence',
+];
+
+function extractClass(html: string, url: string): string {
+  const classes = ['Barbarian', 'Druid', 'Necromancer', 'Rogue', 'Sorcerer', 'Spiritborn'];
+
+  // URL slug is the most reliable signal
+  for (const cls of classes) {
+    if (url.toLowerCase().includes(cls.toLowerCase())) return cls;
+  }
+
+  // Page title is next most reliable
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if (titleMatch) {
+    const title = titleMatch[1];
+    for (const cls of classes) {
+      if (title.toLowerCase().includes(cls.toLowerCase())) return cls;
+    }
+  }
+
+  // Fall back to highest frequency across the full page (nav mentions all classes once;
+  // the actual build class will appear many more times)
+  let best = 'Unknown';
+  let bestCount = 0;
+  for (const cls of classes) {
+    const count = (html.toLowerCase().match(new RegExp(cls.toLowerCase(), 'g')) ?? []).length;
+    if (count > bestCount) { bestCount = count; best = cls; }
+  }
+  return best;
+}
+
+function extractBuildName(html: string, url: string): string {
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if (titleMatch) {
+    return titleMatch[1]
+      .replace(/\s*[|\-–]\s*Maxroll.*$/i, '')
+      .replace(/\s*Build Guide.*$/i, '')
+      .trim();
+  }
+  const slug = url.split('/').pop() ?? '';
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function extractSlotPriorities(text: string): SlotPriority[] {
+  const slots: SlotPriority[] = [];
+  const lines = text.split(/[\n.]+/).map(l => l.trim()).filter(Boolean);
+
+  for (const slot of D4_SLOTS) {
+    const slotIdx = lines.findIndex(l => l.toLowerCase().includes(slot.toLowerCase()));
+    if (slotIdx === -1) continue;
+
+    const window = lines.slice(slotIdx, slotIdx + 8).join(' ');
+    const affixes = KNOWN_AFFIXES.filter(a =>
+      window.toLowerCase().includes(a.toLowerCase())
+    );
+
+    if (affixes.length > 0) {
+      const normalizedSlot = slot.replace(/ [12]$/, '');
+      if (!slots.find(s => s.slot === normalizedSlot)) {
+        slots.push({ slot: normalizedSlot, affixes });
+      }
+    }
+  }
+
+  return slots;
+}
+
+function extractKeyStats(text: string): string[] {
+  return KNOWN_AFFIXES.filter(a => {
+    const count = (text.toLowerCase().match(new RegExp(a.toLowerCase(), 'g')) ?? []).length;
+    return count >= 2;
+  });
+}
+
+// Ask Claude to identify build-enabling unique items AND their farming targets.
+// Single call at build-load time — not per-item-analysis.
+async function identifyCriticalItems(rawText: string, cls: string, buildName: string): Promise<CriticalItem[]> {
+  try {
+    const resp = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 900,
+      system: `You are a Diablo 4 build analyst with deep knowledge of the game's item system, boss drop tables, Codex of Power, and progression path.
+
+Extract the REQUIRED items AND aspects from a build guide. For each, provide accurate farming/acquisition information.
+
+CRITICAL DISTINCTION — get itemType right:
+- "unique_item": A specific named Unique (orange) item that drops from enemies/bosses. Has a unique 3D model. Examples: "Kessime's Legacy", "Bloodless Scream", "Howl from Below". Farmed by killing specific bosses or general Torment content.
+- "aspect": A Legendary Aspect from the Codex of Power or extracted from a Legendary. Examples: "Hematolagnia" (modifies Blood Wave), "Aspect of the Umbral". IMPORTANT: aspects are NOT dropped as items — they are either: (a) unlocked by completing a specific dungeon (Codex), or (b) extracted from a Legendary item that rolled with it. Do NOT treat aspects as boss-drop items.
+
+INCLUDE as critical:
+- Unique items without which the build's primary skill/mechanic cannot function
+- Legendary Aspects that are described as "required", "necessary", "core", "essential" and cannot be substituted
+- Items/aspects described as "turning on" the build or unlocking key synergies
+
+EXCLUDE:
+- Optional upgrades or BiS Mythic/Uber Uniques
+- Generic rare/magical items
+- "Nice to have" improvements
+
+D4 FARMING KNOWLEDGE:
+UNIQUE ITEMS:
+- Most: drop from any Torment 1+ content (world drops)
+- Boss-specific: Andariel → pants/boots/gloves, Duriel → chest/legs, Varshan → rings/amulets, Grigoire → armor, Beast in Ice → off-hand, Lord Zir → head
+- Uber Uniques: only from Tormented bosses / Uber Andariel / Uber Duriel
+- Helltide Mysterious Chests: target specific equipment slots
+- Gambling (Obols): target a slot by item type
+
+LEGENDARY ASPECTS (itemType = "aspect"):
+- Codex of Power: complete the specific dungeon once to unlock permanently. Check D4 Codex or Wowhead for dungeon name.
+- Extract from Legendary: use Occultist to extract from any Legendary that rolled with the aspect (destroys the item).
+- Imprint: use Occultist to imprint onto any Rare/Legendary item of the correct slot.
+
+Torment tiers: Torment 1 ≈ level 60+, Torment 4 ≈ level 90+ strong gear.
+
+Return 2–5 entries. Fewer is better.
+
+OUTPUT: Valid JSON array only, no markdown:
+[{
+  "name": "Item or Aspect Name",
+  "slot": "Helm|Chest|Ring|etc. — use 'Any' for aspects that can go on multiple slots",
+  "itemType": "unique_item|aspect",
+  "why": "one sentence on how this enables the build",
+  "found": false,
+  "farm": {
+    "activity": "e.g. 'Kill Andariel' or 'Complete Anica\\'s Claim dungeon (Codex)' or 'Extract from Legendary or complete dungeon'",
+    "tormentTier": "Torment 1+",
+    "characterLevel": "60+",
+    "pitTier": null,
+    "notes": "specific tip on fastest way to get this"
+  }
+}]`,
+      messages: [{
+        role: 'user',
+        content: `Build: ${buildName}\nClass: ${cls}\n\nGuide text:\n${rawText.slice(0, 3500)}\n\nIdentify required unique items with farming details.`,
+      }],
+    });
+
+    let text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '[]';
+    text = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    const raw = JSON.parse(text) as Partial<CriticalItem>[];
+    const items: CriticalItem[] = raw.map(i => ({ itemType: 'unique_item' as CriticalItemType, ...i } as CriticalItem));
+    console.log(`[BuildLoader] Critical items: ${items.map(i => `${i.name} [${i.itemType}] (${i.farm?.activity})`).join(', ')}`);
+    return items;
+  } catch (err) {
+    console.error('[BuildLoader] Critical item extraction failed:', err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
+// Derive overall target tier from the hardest critical item to get
+export function getTargetProgression(items: CriticalItem[]): { tormentTier: string; characterLevel: string; summary: string } {
+  if (!items.length) return { tormentTier: 'Torment 1', characterLevel: '60+', summary: '' };
+  // Pick the highest tier required across all items
+  const tiers = items.map(i => i.farm?.tormentTier ?? 'Torment 1');
+  const levels = items.map(i => i.farm?.characterLevel ?? '60+');
+  const hardest = tiers.sort().reverse()[0];
+  const highestLevel = levels.sort().reverse()[0];
+  const activities = [...new Set(items.map(i => i.farm?.activity).filter(Boolean))];
+  return {
+    tormentTier: hardest,
+    characterLevel: highestLevel,
+    summary: `Farm ${activities.join(', ')} at ${hardest}`,
+  };
+}
+
+export async function loadBuild(url: string): Promise<BuildConfig> {
+  console.log(`[BuildLoader] Fetching ${url}`);
+  const resp = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; D4Advisor/1.0)' },
+  });
+  if (!resp.ok) throw new Error(`Fetch failed: ${resp.status} ${resp.statusText}`);
+
+  const html = await resp.text();
+  const text = stripHtml(html);
+
+  const cls = extractClass(html, url);
+  const name = extractBuildName(html, url);
+  const slots = extractSlotPriorities(text);
+  const keyStats = extractKeyStats(text);
+
+  // Preserve found-status from any previously loaded version of this build
+  let existingFoundMap: Record<string, boolean> = {};
+  try {
+    const existing = await getCurrentBuild();
+    if (existing?.url === url) {
+      existingFoundMap = Object.fromEntries(
+        (existing.criticalItems ?? []).map(i => [i.name, i.found])
+      );
+    }
+  } catch { /* first load */ }
+
+  const criticalItems = await identifyCriticalItems(text, cls, name);
+  // Restore found status if re-loading same build
+  for (const item of criticalItems) {
+    if (existingFoundMap[item.name] !== undefined) item.found = existingFoundMap[item.name];
+  }
+
+  const build: BuildConfig = {
+    name,
+    class: cls,
+    url,
+    fetchedAt: new Date().toISOString(),
+    slots,
+    keyStats,
+    criticalItems,
+    rawText: text.slice(0, 4000),
+  };
+
+  await Bun.write(BUILD_JSON, JSON.stringify(build, null, 2));
+  console.log(`[BuildLoader] Saved: ${name} (${cls}) — ${slots.length} slots, ${criticalItems.length} critical items`);
+  return build;
+}
+
+export async function getCurrentBuild(): Promise<BuildConfig | null> {
+  try {
+    const file = Bun.file(BUILD_JSON);
+    if (!await file.exists()) return null;
+    return await file.json() as BuildConfig;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadFarmingBuild(url: string): Promise<BuildConfig> {
+  console.log(`[BuildLoader] Fetching farming build ${url}`);
+  const resp = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; D4Advisor/1.0)' },
+  });
+  if (!resp.ok) throw new Error(`Fetch failed: ${resp.status} ${resp.statusText}`);
+
+  const html = await resp.text();
+  const text = stripHtml(html);
+
+  const cls   = extractClass(html, url);
+  const name  = extractBuildName(html, url);
+  const slots = extractSlotPriorities(text);
+  const keyStats = extractKeyStats(text);
+
+  const build: BuildConfig = {
+    name,
+    class: cls,
+    url,
+    fetchedAt: new Date().toISOString(),
+    slots,
+    keyStats,
+    criticalItems: [],
+    rawText: text.slice(0, 4000),
+  };
+
+  await Bun.write(FARMING_BUILD_JSON, JSON.stringify(build, null, 2));
+  console.log(`[BuildLoader] Farming build saved: ${name} (${cls}) — ${slots.length} slots`);
+  return build;
+}
+
+export async function getFarmingBuild(): Promise<BuildConfig | null> {
+  try {
+    const file = Bun.file(FARMING_BUILD_JSON);
+    if (!await file.exists()) return null;
+    const b = await file.json() as BuildConfig;
+    return b.name ? b : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearFarmingBuild(): Promise<void> {
+  await Bun.write(FARMING_BUILD_JSON, '{}');
+}
+
+export async function activateEndgameBuild(): Promise<BuildConfig | null> {
+  const build = await getCurrentBuild();
+  if (!build) return null;
+  for (const item of build.criticalItems) item.found = true;
+  await Bun.write(BUILD_JSON, JSON.stringify(build, null, 2));
+  await clearFarmingBuild();
+  console.log('[BuildLoader] Endgame activated — all critical items marked found, farming build cleared');
+  return build;
+}
+
+export async function markCriticalItemFound(name: string, found: boolean): Promise<BuildConfig | null> {
+  const build = await getCurrentBuild();
+  if (!build) return null;
+
+  const item = build.criticalItems.find(i => i.name.toLowerCase() === name.toLowerCase());
+  if (!item) return null;
+
+  item.found = found;
+  await Bun.write(BUILD_JSON, JSON.stringify(build, null, 2));
+  console.log(`[BuildLoader] ${item.name} marked as ${found ? 'found' : 'not found'}`);
+  return build;
+}

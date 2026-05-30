@@ -1,0 +1,12 @@
+{
+  "name": "diablo4-advisor",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "bun run server.ts",
+    "dev": "bun --watch run server.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
+    "sharp": "^0.34.5"
+  }
+}

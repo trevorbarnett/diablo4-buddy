@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D4 Item Advisor</title>
+  <style>
+    :root {
+      --bg: #080c14; --panel: #0f1623; --panel2: #141d2e; --border: #1e2d45;
+      --gold: #e8a838; --gold-dim: #9a6e24; --green: #3ecf8e; --red: #e85555;
+      --yellow: #f0b429; --blue: #5b9cf6; --purple: #a78bfa;
+      --text: #e2e8f0; --muted: #64748b; --muted2: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; font-size: 14px; }
+
+    /* Header */
+    header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .d4-icon { font-size: 22px; }
+    .header-title { font-size: 16px; font-weight: 700; color: var(--gold); }
+    .build-badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted2); background: var(--panel2); }
+    .build-badge.loaded { border-color: var(--gold-dim); color: var(--gold); }
+    header .spacer { flex: 1; }
+    .stats-chip { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; }
+
+    /* Phase badge */
+    .phase-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; letter-spacing: 0.05em; }
+    .phase-preparing { background: rgba(232,85,85,.12); color: var(--red); border: 1px solid rgba(232,85,85,.3); }
+    .phase-optimizing { background: rgba(62,207,142,.12); color: var(--green); border: 1px solid rgba(62,207,142,.3); }
+
+    /* Layout */
+    main { flex: 1; display: flex; gap: 12px; padding: 14px; overflow: hidden; }
+    .left-col { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+    .right-col { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-width: 0; }
+
+    /* Panels */
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+    .panel-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+
+    /* Inputs / buttons */
+    input[type="url"] { width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 7px 10px; font-size: 12px; outline: none; margin-bottom: 7px; }
+    input[type="url"]:focus { border-color: var(--gold-dim); }
+    button { width: 100%; padding: 8px; border: none; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--gold); color: #000; }
+    .btn-analyze { background: linear-gradient(135deg, #c41e3a 0%, #8b0000 100%); color: #fff; font-size: 15px; padding: 12px; letter-spacing: 0.04em; }
+    .btn-upload { background: var(--panel2); color: var(--muted2); border: 1px solid var(--border); }
+
+    /* Build info */
+    .build-class { font-size: 15px; font-weight: 700; color: var(--gold); margin-bottom: 4px; }
+    .build-slot-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .build-slot { font-size: 11px; color: var(--muted2); }
+    .build-slot strong { color: var(--text); }
+
+    /* Critical items */
+    .critical-list { display: flex; flex-direction: column; gap: 6px; }
+    .critical-item { display: flex; align-items: flex-start; gap: 8px; padding: 7px 8px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--border); cursor: pointer; transition: border-color 0.15s; }
+    .critical-item:hover { border-color: var(--gold-dim); }
+    .critical-item.found { border-color: rgba(62,207,142,.3); background: rgba(62,207,142,.05); }
+    .ci-check { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .critical-item.found .ci-check { background: var(--green); border-color: var(--green); color: #000; }
+    .ci-body { flex: 1; min-width: 0; }
+    .ci-name { font-size: 12px; font-weight: 700; color: var(--text); }
+    .critical-item.found .ci-name { color: var(--green); text-decoration: line-through; opacity: 0.7; }
+    .ci-slot { font-size: 10px; color: var(--muted); }
+    .ci-why { font-size: 11px; color: var(--muted2); margin-top: 2px; line-height: 1.4; }
+    .ci-farm { font-size: 10px; color: var(--muted); margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); line-height: 1.5; }
+    .ci-farm strong { color: var(--blue); }
+
+    /* Target progression banner */
+    .target-banner { background: rgba(91,156,246,.08); border: 1px solid rgba(91,156,246,.25); border-radius: 6px; padding: 8px 12px; margin-top: 8px; }
+    .target-banner-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--blue); margin-bottom: 4px; }
+    .target-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+    .target-stat { font-size: 11px; color: var(--muted2); }
+    .target-stat strong { color: var(--text); }
+
+    .progress-bar-track { height: 4px; background: var(--panel2); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+    .progress-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+
+    /* Hotkey / drop */
+    .hotkey-hint { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
+    .hotkey-hint kbd { background: var(--panel2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 11px; color: var(--muted2); }
+    .drop-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 10px; text-align: center; font-size: 11px; color: var(--muted); cursor: pointer; transition: border-color 0.15s; margin-top: 6px; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--gold-dim); color: var(--muted2); }
+    .drop-zone input { display: none; }
+
+    /* Idle / loading */
+    .idle-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 200px; border: 2px dashed var(--border); border-radius: 10px; color: var(--muted); font-size: 13px; }
+    .idle-icon { font-size: 36px; opacity: 0.3; }
+    .loading-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; color: var(--muted2); }
+    .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Critical item alert */
+    .critical-alert { background: rgba(167,139,250,.1); border: 2px solid rgba(167,139,250,.5); border-radius: 10px; padding: 14px 16px; display: flex; gap: 10px; align-items: flex-start; }
+    .critical-alert-icon { font-size: 24px; flex-shrink: 0; }
+    .critical-alert-title { font-size: 14px; font-weight: 800; color: var(--purple); }
+    .critical-alert-body { font-size: 12px; color: var(--muted2); margin-top: 4px; line-height: 1.5; }
+
+    /* Result card */
+    .result-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .result-header { padding: 12px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .verdict-badge { font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 99px; letter-spacing: 0.06em; flex-shrink: 0; }
+    .verdict-KEEP    { background: rgba(62,207,142,.15);  color: var(--green);  border: 1px solid rgba(62,207,142,.3); }
+    .verdict-TEMPER  { background: rgba(240,180,41,.12);  color: var(--yellow); border: 1px solid rgba(240,180,41,.3); }
+    .verdict-SALVAGE { background: rgba(232,85,85,.12);   color: var(--red);    border: 1px solid rgba(232,85,85,.3); }
+    .result-item-name { font-size: 16px; font-weight: 700; }
+    .result-slot { font-size: 11px; color: var(--muted); }
+    .score-bar-wrap { flex: 1; min-width: 80px; max-width: 120px; }
+    .score-bar-track { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+    .score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+    .score-label { font-size: 10px; color: var(--muted); text-align: right; }
+
+    /* Upgrade badge */
+    .upgrade-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; flex-shrink: 0; }
+    .upgrade-UPGRADE   { background: rgba(62,207,142,.15); color: var(--green);  border: 1px solid rgba(62,207,142,.3); }
+    .upgrade-SIDEGRADE { background: rgba(91,156,246,.12); color: var(--blue);   border: 1px solid rgba(91,156,246,.3); }
+    .upgrade-DOWNGRADE { background: rgba(232,85,85,.12);  color: var(--red);    border: 1px solid rgba(232,85,85,.3); }
+
+    .result-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    /* Comparison diff */
+    .comparison-diff { display: flex; gap: 10px; }
+    .diff-col { flex: 1; }
+    .diff-col-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; }
+    .diff-col-title.gained { color: var(--green); }
+    .diff-col-title.lost   { color: var(--red); }
+    .diff-chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 99px; margin: 2px 2px 2px 0; }
+    .diff-chip.gained { background: rgba(62,207,142,.12); color: var(--green); border: 1px solid rgba(62,207,142,.25); }
+    .diff-chip.lost   { background: rgba(232,85,85,.1);   color: var(--red);   border: 1px solid rgba(232,85,85,.2); }
+
+    /* Affix columns */
+    .affixes-row { display: flex; gap: 12px; }
+    .affix-col { flex: 1; }
+    .affix-col-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+    .affix-col-title.good { color: var(--green); }
+    .affix-col-title.bad  { color: var(--red); }
+    .affix-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; margin: 2px 2px 2px 0; }
+    .affix-chip.good { background: rgba(62,207,142,.12); color: var(--green); border: 1px solid rgba(62,207,142,.25); }
+    .affix-chip.bad  { background: rgba(232,85,85,.1);   color: var(--red);   border: 1px solid rgba(232,85,85,.2); }
+
+    .temper-box { background: rgba(240,180,41,.08); border: 1px solid rgba(240,180,41,.25); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--yellow); display: flex; gap: 8px; align-items: flex-start; }
+    .temper-label { font-weight: 700; flex-shrink: 0; }
+    .reasoning-box { font-size: 13px; line-height: 1.55; color: var(--muted2); border-left: 2px solid var(--border); padding-left: 10px; }
+
+    /* History */
+    .history-grid { display: flex; flex-direction: column; gap: 6px; }
+    .history-item { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; }
+    .history-name { font-size: 12px; flex: 1; }
+    .history-score { font-size: 11px; color: var(--muted); }
+    .history-time { font-size: 10px; color: var(--muted); }
+
+    .error-box { background: rgba(232,85,85,.1); border: 1px solid rgba(232,85,85,.3); border-radius: 6px; padding: 10px 14px; font-size: 12px; color: var(--red); }
+
+    /* Equipment grid */
+    .equip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    .equip-slot { background: var(--panel2); border: 1px solid var(--border); border-radius: 5px; padding: 5px 7px; cursor: default; transition: border-color 0.15s; min-height: 44px; }
+    .equip-slot.populated { border-color: rgba(91,156,246,.35); }
+    .equip-slot.populated:hover { border-color: var(--blue); }
+    .equip-slot-label { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .equip-slot-name { font-size: 11px; font-weight: 600; color: var(--text); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .equip-slot-power { font-size: 10px; color: var(--blue); }
+    .equip-slot-empty { font-size: 10px; color: var(--muted); opacity: 0.5; margin-top: 4px; }
+    .equip-slot .clear-btn { float: right; background: none; border: none; width: auto; padding: 0; color: var(--muted); font-size: 11px; cursor: pointer; line-height: 1; }
+    .equip-slot .clear-btn:hover { color: var(--red); opacity: 1; }
+    .save-equipped-btn { background: rgba(91,156,246,.12); color: var(--blue); border: 1px solid rgba(91,156,246,.3); font-size: 12px; padding: 6px; margin-top: 6px; width: 100%; }
+    .save-equipped-btn:hover { opacity: 0.85; }
+
+    /* Item type badges */
+    .ci-type-badge { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .ci-type-unique { background: rgba(232,168,56,.15); color: var(--gold); border: 1px solid rgba(232,168,56,.3); }
+    .ci-type-aspect { background: rgba(167,139,250,.15); color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
+
+    /* Objectives panel */
+    .objective-item { padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .objective-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .objective-num { font-size: 10px; font-weight: 700; color: var(--muted); margin-bottom: 3px; }
+    .objective-name { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+    .objective-farm { font-size: 11px; color: var(--blue); margin-bottom: 2px; }
+    .objective-tip { font-size: 10px; color: var(--muted); line-height: 1.4; }
+    .context-box { background: rgba(232,85,85,.08); border: 1px solid rgba(232,85,85,.2); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--muted2); line-height: 1.5; margin-bottom: 8px; }
+
+    /* Settings collapsible */
+    .settings-toggle { font-size: 10px; color: var(--muted); cursor: pointer; user-select: none; }
+    .settings-toggle:hover { color: var(--muted2); }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="d4-icon">⚔️</span>
+  <span class="header-title">D4 Item Advisor</span>
+  <span class="build-badge" id="build-badge">No build loaded</span>
+  <span class="phase-badge phase-preparing" id="phase-badge" style="display:none">PREPARING</span>
+  <div class="spacer"></div>
+  <span class="stats-chip" id="stats-chip">0 calls</span>
+</header>
+
+<main>
+  <!-- Left column -->
+  <div class="left-col">
+
+    <!-- Objectives (phase + what to farm) -->
+    <div class="panel" id="objectives-panel" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span class="phase-badge phase-preparing" id="phase-badge2">PREPARING</span>
+        <span id="critical-progress-text" style="font-size:10px;color:var(--muted);"></span>
+      </div>
+      <div class="progress-bar-track" style="margin-bottom:10px;">
+        <div class="progress-bar-fill" id="critical-progress-bar" style="background:var(--red);width:0%;"></div>
+      </div>
+      <div id="objectives-body"></div>
+    </div>
+
+    <!-- Transition plan (when farming build is active) -->
+    <div class="panel" id="transition-panel" style="display:none;background:rgba(91,156,246,.05);border-color:rgba(91,156,246,.2);">
+      <div class="panel-title" style="color:var(--blue);">Transition Plan</div>
+      <div id="transition-body"></div>
+    </div>
+
+    <!-- Build enablers checklist -->
+    <div class="panel" id="critical-panel" style="display:none;">
+      <div class="panel-title">Build Enablers <span id="critical-check-count" style="font-size:10px;color:var(--muted);font-weight:400;"></span></div>
+      <div class="critical-list" id="critical-list"></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;">Click to mark as found</div>
+    </div>
+
+    <!-- Equipped gear -->
+    <div class="panel">
+      <div class="panel-title" style="display:flex;align-items:center;">
+        Equipped Gear
+        <button style="margin-left:auto;font-size:10px;color:var(--muted);background:none;border:none;width:auto;padding:0;cursor:pointer;" onclick="clearAllEquipment()">clear all</button>
+      </div>
+      <div class="equip-grid" id="equip-grid"></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:5px;">Items auto-save when you click "Save as equipped" on an analysis card.</div>
+    </div>
+
+    <!-- Settings (collapsible) -->
+    <div class="panel">
+      <div class="panel-title" style="display:flex;align-items:center;">
+        Settings
+        <span class="settings-toggle" style="margin-left:auto;" onclick="document.getElementById('settings-body').style.display=document.getElementById('settings-body').style.display==='none'?'':'none'">toggle</span>
+      </div>
+      <div id="settings-body">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Target build URL <span style="color:var(--muted);font-weight:400;">(what you're working toward)</span></div>
+        <input type="url" id="build-url-input" placeholder="https://maxroll.gg/d4/build-guides/..." style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:6px 9px;font-size:11px;outline:none;margin-bottom:6px;">
+        <button class="btn-primary" id="load-build-btn" onclick="loadBuild()" style="margin-bottom:10px;">Load Build</button>
+
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Farming build URL <span style="color:var(--muted);font-weight:400;">(what you're playing now — optional)</span></div>
+        <input type="url" id="farming-build-url-input" placeholder="https://maxroll.gg/d4/build-guides/..." style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:6px 9px;font-size:11px;outline:none;margin-bottom:6px;">
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <button class="btn-primary" id="load-farming-btn" onclick="loadFarmingBuild()" style="flex:1;">Load Farming Build</button>
+          <button id="clear-farming-btn" onclick="clearFarmingBuild()" style="width:auto;padding:6px 10px;font-size:11px;background:none;color:var(--muted);border:1px solid var(--border);border-radius:4px;display:none;">Clear</button>
+        </div>
+
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">D4 screenshots folder</div>
+        <input type="text" id="screenshots-path" placeholder="C:\Users\you\Documents\Diablo IV\Screenshots" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:6px 9px;font-size:11px;outline:none;margin-bottom:6px;font-family:monospace;">
+        <button class="btn-primary" id="save-path-btn" onclick="savePath()" style="margin-bottom:6px;">Save &amp; Watch</button>
+        <div id="watcher-status" style="font-size:10px;color:var(--muted);margin-bottom:6px;"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <input type="checkbox" id="delete-after" onchange="saveDeletePref(this.checked)" style="cursor:pointer;">
+          <label for="delete-after" style="font-size:11px;color:var(--muted2);cursor:pointer;">Delete screenshot after analysis</label>
+        </div>
+        <div style="font-size:10px;color:var(--muted);">
+          Press <strong>PrintScreen</strong> in D4 to auto-analyze.
+          <span id="notif-btn-wrap"> <a href="#" onclick="requestNotifPermission();return false;" style="color:var(--blue);">Enable notifications</a></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+          <div class="drop-zone" id="drop-zone" style="flex:1;padding:6px;font-size:10px;"
+               onclick="document.getElementById('file-input').click()"
+               ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            paste / drag screenshot
+            <input type="file" id="file-input" accept="image/*" onchange="onFileSelect(event)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right column — scrollable analysis feed -->
+  <div class="right-col" id="right-col">
+    <div id="feed-empty" class="idle-card">
+      <div class="idle-icon">🗡️</div>
+      <div>Press <strong>PrintScreen</strong> in D4 to analyze an item</div>
+      <div style="font-size:11px;">Results appear here and persist across sessions</div>
+    </div>
+    <div id="feed-toolbar" style="display:none;justify-content:space-between;align-items:center;padding:2px 0 6px;">
+      <span id="feed-count" style="font-size:11px;color:var(--muted);"></span>
+      <button id="collapse-btn" onclick="toggleCollapseAll()" style="width:auto;padding:4px 12px;font-size:11px;background:var(--panel2);color:var(--muted2);border:1px solid var(--border);border-radius:4px;">Collapse All</button>
+    </div>
+    <div id="feed" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</main>
+
+<script>
+  const API = 'http://localhost:4002';
+  let currentBuild = null;
+  let currentFarmingBuild = null;
+  let collapseAll = false;
+  const pendingItems = {}; // key → EquippedItem, avoids JSON-in-onclick quoting issues
+
+  // ── Paste support ────────────────────────────────────────────────────────
+  document.addEventListener('paste', async e => {
+    for (const item of e.clipboardData?.items ?? []) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) { await analyzeFile(file); return; }
+      }
+    }
+  });
+
+  // ── Build loader ─────────────────────────────────────────────────────────
+  async function loadBuild() {
+    const url = document.getElementById('build-url-input').value.trim();
+    if (!url) return;
+    const btn = document.getElementById('load-build-btn');
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+
+    try {
+      const resp = await fetch(`${API}/build`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      localStorage.setItem('d4_build_url', url);
+      // Fetch the full build (includes criticalItems)
+      const full = await fetch(`${API}/build`).then(r => r.json());
+      applyBuild(full);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Load Build';
+    }
+  }
+
+  async function loadFarmingBuild() {
+    const url = document.getElementById('farming-build-url-input').value.trim();
+    if (!url) return;
+    const btn = document.getElementById('load-farming-btn');
+    btn.disabled = true; btn.textContent = 'Loading…';
+    try {
+      const resp = await fetch(`${API}/build/farming`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      localStorage.setItem('d4_farming_build_url', url);
+      const full = await fetch(`${API}/build/farming`).then(r => r.json());
+      applyFarmingBuild(full);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Load Farming Build';
+    }
+  }
+
+  async function clearFarmingBuild() {
+    await fetch(`${API}/build/farming`, { method: 'DELETE' });
+    currentFarmingBuild = null;
+    localStorage.removeItem('d4_farming_build_url');
+    document.getElementById('farming-build-url-input').value = '';
+    document.getElementById('clear-farming-btn').style.display = 'none';
+    renderTransitionPanel();
+  }
+
+  function applyFarmingBuild(build) {
+    currentFarmingBuild = build;
+    document.getElementById('farming-build-url-input').value = build.url || '';
+    document.getElementById('clear-farming-btn').style.display = '';
+    renderTransitionPanel();
+  }
+
+  function renderTransitionPanel() {
+    const panel = document.getElementById('transition-panel');
+    const body  = document.getElementById('transition-body');
+    if (!currentFarmingBuild || !currentBuild) { panel.style.display = 'none'; return; }
+
+    panel.style.display = 'block';
+    const missing = (currentBuild.criticalItems || []).filter(i => !i.found);
+    const isReady = missing.length === 0;
+    const readyText = isReady
+      ? `<div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px;">All build enablers found — ready to switch!</div>`
+      : `<div style="font-size:11px;color:var(--muted2);margin-bottom:6px;">Switch to <strong style="color:var(--text)">${escHtml(currentBuild.name)}</strong> once you have:</div>
+         ${missing.map(i => `<div style="font-size:11px;color:var(--muted2);padding:2px 0;">
+           <span style="color:var(--muted)">○</span> ${escHtml(i.name)}
+           <span style="font-size:10px;color:var(--muted);margin-left:4px;">${escHtml(i.farm?.activity ?? '')}</span>
+         </div>`).join('')}`;
+
+    const btnLabel  = isReady ? `Activate ${escHtml(currentBuild.name)}` : `Switch to Endgame Now`;
+    const btnStyle  = isReady
+      ? `margin-top:10px;width:100%;padding:8px;font-size:12px;font-weight:700;background:var(--green);color:#000;border:none;border-radius:5px;cursor:pointer;`
+      : `margin-top:10px;width:100%;padding:6px;font-size:11px;background:none;color:var(--muted);border:1px solid var(--border);border-radius:5px;cursor:pointer;`;
+
+    body.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">
+        Evaluating items for <strong style="color:var(--blue)">${escHtml(currentFarmingBuild.name)}</strong>
+      </div>
+      ${readyText}
+      <button style="${btnStyle}" onclick="activateEndgame()">${btnLabel}</button>`;
+  }
+
+  async function activateEndgame() {
+    try {
+      const resp = await fetch(`${API}/build/activate-endgame`, { method: 'POST' });
+      const build = await resp.json();
+      if (build.error) { alert(build.error); return; }
+      currentFarmingBuild = null;
+      applyBuild(build);
+    } catch (err) {
+      alert('Failed to activate endgame build.');
+    }
+  }
+
+  function applyBuild(build) {
+    currentBuild = build;
+
+    // Header badge
+    const badge = document.getElementById('build-badge');
+    badge.textContent = `${build.class} — ${build.name}`;
+    badge.className = 'build-badge loaded';
+
+    // Build summary (slots)
+    const summary = document.getElementById('build-summary');
+    if (summary) {
+      summary.style.display = 'block';
+      const slots = build.slots || [];
+      summary.innerHTML = `
+        <div class="build-class">${build.class}</div>
+        <div style="font-size:12px;color:var(--muted2);margin-bottom:6px;">${build.name}</div>
+        ${slots.length > 0
+          ? `<div class="build-slot-list">${slots.slice(0, 5).map(s =>
+              `<div class="build-slot"><strong>${s.slot}:</strong> ${s.affixes.slice(0,3).join(', ')}${s.affixes.length>3?'+':''}
+              </div>`).join('')}${slots.length > 5 ? `<div class="build-slot" style="color:var(--muted)">…+${slots.length-5} more</div>` : ''}</div>`
+          : `<div style="font-size:11px;color:var(--muted)">⚠ Slot data sparse — Claude will use guide text</div>`
+        }`;
+    }
+
+    // Critical items panel
+    renderCriticalItems(build.criticalItems || []);
+    renderTransitionPanel();
+  }
+
+  function renderCriticalItems(items) {
+    const panel     = document.getElementById('critical-panel');
+    const objPanel  = document.getElementById('objectives-panel');
+    if (!items.length) { panel.style.display = 'none'; objPanel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    objPanel.style.display = 'block';
+
+    const found    = items.filter(i => i.found).length;
+    const total    = items.length;
+    const pct      = Math.round((found / total) * 100);
+    const allFound = found === total;
+    const missing  = items.filter(i => !i.found);
+
+    // Phase badges (header + objectives panel)
+    const phaseClass = allFound ? 'phase-optimizing' : 'phase-preparing';
+    const phaseText  = allFound ? 'OPTIMIZING' : 'PREPARING';
+    document.getElementById('phase-badge').style.display = '';
+    document.getElementById('phase-badge').textContent = phaseText;
+    document.getElementById('phase-badge').className = 'phase-badge ' + phaseClass;
+    document.getElementById('phase-badge2').textContent = phaseText;
+    document.getElementById('phase-badge2').className = 'phase-badge ' + phaseClass;
+
+    document.getElementById('critical-progress-text').textContent = `${found}/${total} build enablers`;
+    document.getElementById('critical-check-count').textContent = `${found}/${total}`;
+    const bar = document.getElementById('critical-progress-bar');
+    bar.style.width = `${pct}%`;
+    bar.style.background = allFound ? 'var(--green)' : pct > 50 ? 'var(--yellow)' : 'var(--red)';
+
+    // ── Objectives panel ──────────────────────────────────────────────────
+    let objHtml = '';
+    if (allFound) {
+      objHtml = `<div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:6px;">Build is active</div>
+        <div style="font-size:11px;color:var(--muted2);line-height:1.5;">All build enablers found. Focus on upgrading affixes in each slot — analyze items with PrintScreen and keep anything that scores 7+.</div>`;
+    } else {
+      const hardestTier  = missing.map(i => i.farm?.tormentTier ?? 'Torment 1').sort().reverse()[0];
+      const hardestLevel = missing.map(i => i.farm?.characterLevel ?? '60+').sort().reverse()[0];
+      objHtml = `<div class="context-box">
+        Your build isn't active yet — missing ${missing.length} core item${missing.length > 1 ? 's' : ''}. Damage and survivability will feel off until you have these. If the content feels too hard, farm a lower tier while you collect them.
+      </div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">What to farm now</div>
+      ${missing.map((item, i) => {
+        const isAspect  = item.itemType === 'aspect';
+        const typeBadge = `<span class="ci-type-badge ${isAspect ? 'ci-type-aspect' : 'ci-type-unique'}">${isAspect ? 'Aspect' : 'Unique'}</span>`;
+        return `<div class="objective-item">
+          <div class="objective-num">TARGET ${i + 1}</div>
+          <div class="objective-name">${escHtml(item.name)} ${typeBadge}</div>
+          <div class="objective-farm">${escHtml(item.farm?.activity ?? 'Any Torment content')} · ${escHtml(item.farm?.tormentTier ?? 'Torment 1+')}</div>
+          ${item.farm?.notes ? `<div class="objective-tip">${escHtml(item.farm.notes)}</div>` : ''}
+        </div>`;
+      }).join('')}
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        Minimum to reach all targets: <strong style="color:var(--text);">${hardestTier}</strong> · Level <strong style="color:var(--text);">${hardestLevel}</strong>
+      </div>`;
+    }
+    document.getElementById('objectives-body').innerHTML = objHtml;
+
+    // ── Enablers checklist ────────────────────────────────────────────────
+    document.getElementById('critical-list').innerHTML = items.map(item => {
+      const isAspect  = item.itemType === 'aspect';
+      const typeBadge = `<span class="ci-type-badge ${isAspect ? 'ci-type-aspect' : 'ci-type-unique'}">${isAspect ? 'Aspect' : 'Unique'}</span>`;
+      return `<div class="critical-item ${item.found ? 'found' : ''}" onclick="toggleFound('${escHtml(item.name)}', ${!item.found})">
+        <div class="ci-check">${item.found ? '✓' : ''}</div>
+        <div class="ci-body">
+          <div class="ci-name" style="display:flex;align-items:center;gap:5px;">${escHtml(item.name)} ${typeBadge}</div>
+          <div class="ci-slot">${escHtml(item.slot)}</div>
+          <div class="ci-why">${escHtml(item.why)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function toggleFound(name, found) {
+    try {
+      const resp = await fetch(`${API}/build/found`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, found }),
+      });
+      const data = await resp.json();
+      if (data.error) return;
+      renderCriticalItems(data.criticalItems);
+      if (currentBuild) currentBuild.criticalItems = data.criticalItems;
+      renderTransitionPanel();
+    } catch {}
+  }
+
+  // Restore builds on page load
+  window.addEventListener('load', async () => {
+    const savedUrl = localStorage.getItem('d4_build_url');
+    if (savedUrl) {
+      document.getElementById('build-url-input').value = savedUrl;
+      try {
+        const resp = await fetch(`${API}/build`);
+        if (resp.ok) applyBuild(await resp.json());
+      } catch {}
+    }
+    const savedFarmingUrl = localStorage.getItem('d4_farming_build_url');
+    if (savedFarmingUrl) {
+      document.getElementById('farming-build-url-input').value = savedFarmingUrl;
+      try {
+        const resp = await fetch(`${API}/build/farming`);
+        if (resp.ok) applyFarmingBuild(await resp.json());
+      } catch {}
+    }
+  });
+
+  // ── Analyze ──────────────────────────────────────────────────────────────
+  function handleAnalysisResult(placeholder, data) {
+    replacePlaceholder(placeholder, data);
+    updateStats(data.tokenStats);
+    if (data.equippedUpdated && data.item_slot) {
+      equippedLoadout[data.item_slot] = {
+        item_name: data.item_name,
+        item_slot: data.item_slot,
+        item_power: equippedLoadout[data.item_slot]?.item_power ?? null,
+        affixes: [...(data.affixes_good || []), ...(data.affixes_bad || [])],
+        scannedAt: data.timestamp ?? Date.now(),
+      };
+      renderEquipGrid();
+    }
+  }
+
+  async function analyze() {
+    const placeholder = prependPlaceholder();
+    try {
+      const resp = await fetch(`${API}/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await resp.json();
+      if (data.error) { replacePlaceholder(placeholder, null, data.error); return; }
+      handleAnalysisResult(placeholder, data);
+    } catch (err) {
+      replacePlaceholder(placeholder, null, err.message);
+    }
+  }
+
+  async function analyzeFile(file) {
+    const placeholder = prependPlaceholder();
+    try {
+      const imageBase64 = await fileToBase64(file);
+      const resp = await fetch(`${API}/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64 }) });
+      const data = await resp.json();
+      if (data.error) { replacePlaceholder(placeholder, null, data.error); return; }
+      handleAnalysisResult(placeholder, data);
+    } catch (err) {
+      replacePlaceholder(placeholder, null, err.message);
+    }
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader(); r.onload = () => resolve(r.result.split(',')[1]); r.onerror = reject; r.readAsDataURL(file);
+    });
+  }
+
+  // ── Feed ─────────────────────────────────────────────────────────────────
+  function getFeed() { return document.getElementById('feed'); }
+
+  function setFeedEmpty(empty) {
+    document.getElementById('feed-empty').style.display = empty ? '' : 'none';
+  }
+
+  function prependPlaceholder() {
+    setFeedEmpty(false);
+    const el = document.createElement('div');
+    el.className = 'loading-card';
+    el.style.cssText = 'min-height:80px;';
+    el.innerHTML = '<div class="spinner"></div><div>Analyzing…</div>';
+    getFeed().prepend(el);
+    return el;
+  }
+
+  function replacePlaceholder(el, data, errorMsg) {
+    if (errorMsg) {
+      el.outerHTML = `<div class="error-box">${escHtml(errorMsg)}</div>`;
+    } else {
+      el.outerHTML = buildCard(data);
+    }
+    updateFeedToolbar();
+  }
+
+  function prependCard(data) {
+    setFeedEmpty(false);
+    const el = document.createElement('div');
+    el.innerHTML = buildCard(data);
+    const feed = getFeed();
+    [...el.children].reverse().forEach(child => feed.prepend(child));
+    updateFeedToolbar();
+  }
+
+  function buildCard(data) {
+    if (!data.item_found) return `<div class="error-box">No item tooltip found in screenshot.</div>`;
+
+    const score      = data.score ?? 0;
+    const scoreColor = score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--yellow)' : 'var(--red)';
+    const ts         = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '';
+
+    const critBanner = data.is_critical_item ? `
+      <div class="critical-alert" style="margin-bottom:8px;">
+        <div class="critical-alert-icon">⭐</div>
+        <div>
+          <div class="critical-alert-title">BUILD ENABLER: ${escHtml(data.critical_item_name || data.item_name)}</div>
+          <div class="critical-alert-body">Mark as found in Build Enablers panel.</div>
+        </div>
+      </div>` : '';
+
+    const compSection = data.comparison_mode ? (() => {
+      const gained = (data.equipped_affixes_gained || []).map(a => `<span class="diff-chip gained">+${escHtml(a)}</span>`).join('');
+      const lost   = (data.equipped_affixes_lost  || []).map(a => `<span class="diff-chip lost">-${escHtml(a)}</span>`).join('');
+      const upBadge = data.upgrade_verdict ? `<span class="upgrade-badge upgrade-${data.upgrade_verdict}">${data.upgrade_verdict}</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--border);">
+        <span style="font-size:11px;color:var(--muted)">vs <strong style="color:var(--muted2)">${escHtml(data.equipped_item_name||'equipped')}</strong></span>${upBadge}
+      </div>
+      ${(gained||lost) ? `<div class="comparison-diff">
+        ${gained ? `<div class="diff-col"><div class="diff-col-title gained">Gained</div>${gained}</div>` : ''}
+        ${lost   ? `<div class="diff-col"><div class="diff-col-title lost">Lost</div>${lost}</div>` : ''}
+      </div>` : ''}`;
+    })() : '';
+
+    const good = (data.affixes_good||[]).map(a=>`<span class="affix-chip good">${escHtml(a)}</span>`).join('');
+    const bad  = (data.affixes_bad ||[]).map(a=>`<span class="affix-chip bad">${escHtml(a)}</span>`).join('');
+
+    const key = `item_${data.timestamp ?? Date.now()}`;
+    pendingItems[key] = {
+      item_name: data.item_name, item_slot: data.item_slot, item_power: null,
+      affixes: [...(data.affixes_good || []), ...(data.affixes_bad || [])],
+    };
+    const saveBtn = data.equippedUpdated
+      ? `<div style="font-size:11px;color:var(--green);padding:4px 0;">✓ Equipped loadout updated with new affixes</div>`
+      : data.item_slot === 'Ring'
+        ? `<div style="display:flex;gap:6px;">
+             <button class="save-equipped-btn" style="flex:1" onclick="saveAsEquipped('${key}', this, 'Ring 1')">Save to Ring 1</button>
+             <button class="save-equipped-btn" style="flex:1" onclick="saveAsEquipped('${key}', this, 'Ring 2')">Save to Ring 2</button>
+           </div>`
+        : `<button class="save-equipped-btn" onclick="saveAsEquipped('${key}', this)">Save as equipped in ${escHtml(data.item_slot)} slot</button>`;
+
+    return `${critBanner}<div class="result-card">
+      <div class="result-header" style="cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'flex':'none'">
+        <span class="verdict-badge verdict-${data.verdict}">${data.verdict}</span>
+        <div style="flex:1;min-width:0;">
+          <div class="result-item-name">${escHtml(data.item_name)}</div>
+          <div class="result-slot">${escHtml(data.item_slot)} <span style="color:var(--muted);font-size:10px;">${ts}</span>${data.equippedUpdated ? ` <span style="color:var(--green);font-size:10px;">✓ equipped updated</span>` : ''}</div>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-label">${score}/10</div>
+          <div class="score-bar-track"><div class="score-bar-fill" style="width:${score*10}%;background:${scoreColor}"></div></div>
+        </div>
+      </div>
+      <div class="result-body" style="${collapseAll ? 'display:none' : ''}">
+        ${compSection}
+        ${(good||bad) ? `<div class="affixes-row">
+          ${good ? `<div class="affix-col"><div class="affix-col-title good">Good for build</div>${good}</div>` : ''}
+          ${bad  ? `<div class="affix-col"><div class="affix-col-title bad">Off-build</div>${bad}</div>` : ''}
+        </div>` : ''}
+        ${data.tempering_fix ? `<div class="temper-box"><span class="temper-label">Temper:</span><span>${escHtml(data.tempering_fix)}</span></div>` : ''}
+        <div class="reasoning-box">${escHtml(data.reasoning)}</div>
+        ${saveBtn}
+      </div>
+    </div>`;
+  }
+
+  // Load persisted history into feed on startup
+  async function initFeed() {
+    try {
+      const r = await fetch(`${API}/history`);
+      if (!r.ok) return;
+      const items = await r.json();
+      if (!items.length) return;
+      setFeedEmpty(false);
+      // Render oldest-first so newest ends up on top
+      const feed = getFeed();
+      for (let i = items.length - 1; i >= 0; i--) {
+        const el = document.createElement('div');
+        el.innerHTML = buildCard(items[i]);
+        [...el.children].reverse().forEach(child => feed.prepend(child));
+      }
+      updateFeedToolbar();
+    } catch {}
+  }
+  initFeed();
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function updateStats(stats) {
+    if (!stats) return;
+    document.getElementById('stats-chip').textContent = `${stats.calls} call${stats.calls!==1?'s':''}`;
+  }
+
+  function timeSince(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s/60)}m ago`;
+    return `${Math.floor(s/3600)}h ago`;
+  }
+
+  function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function updateFeedToolbar() {
+    const count = document.querySelectorAll('#feed .result-card').length;
+    const toolbar = document.getElementById('feed-toolbar');
+    if (count === 0) { toolbar.style.display = 'none'; return; }
+    toolbar.style.display = 'flex';
+    document.getElementById('feed-count').textContent = `${count} item${count !== 1 ? 's' : ''}`;
+    document.getElementById('collapse-btn').textContent = collapseAll ? 'Expand All' : 'Collapse All';
+  }
+
+  function toggleCollapseAll() {
+    collapseAll = !collapseAll;
+    document.querySelectorAll('#feed .result-body').forEach(el => {
+      el.style.display = collapseAll ? 'none' : '';
+    });
+    updateFeedToolbar();
+  }
+
+  function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+  function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+  function onDrop(e) {
+    e.preventDefault(); onDragLeave();
+    const file = e.dataTransfer?.files?.[0];
+    if (file?.type.startsWith('image/')) analyzeFile(file);
+  }
+  function onFileSelect(e) {
+    const file = e.target?.files?.[0];
+    if (file) analyzeFile(file);
+  }
+
+  // ── Screenshot folder + SSE + Web Notifications ─────────────────────────
+  async function savePath() {
+    const path = document.getElementById('screenshots-path').value.trim();
+    const del  = document.getElementById('delete-after').checked;
+    const btn  = document.getElementById('save-path-btn');
+    btn.disabled = true;
+    try {
+      const resp = await fetch(`${API}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ screenshotsPath: path, deleteAfterAnalysis: del }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      document.getElementById('watcher-status').textContent = path ? `Watching: ${path}` : 'Watcher stopped.';
+    } catch (err) {
+      document.getElementById('watcher-status').textContent = 'Error: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function saveDeletePref(checked) {
+    await fetch(`${API}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deleteAfterAnalysis: checked }),
+    });
+  }
+
+  async function loadSettings() {
+    try {
+      const r = await fetch(`${API}/settings`);
+      if (!r.ok) return;
+      const s = await r.json();
+      if (s.screenshotsPath) {
+        document.getElementById('screenshots-path').value = s.screenshotsPath;
+        document.getElementById('watcher-status').textContent = `Watching: ${s.screenshotsPath}`;
+      }
+      document.getElementById('delete-after').checked = !!s.deleteAfterAnalysis;
+    } catch {}
+
+    // Also restore saved build URL
+    const savedUrl = localStorage.getItem('d4_build_url');
+    if (savedUrl) document.getElementById('build-url-input').value = savedUrl;
+  }
+
+  function requestNotifPermission() {
+    if (!('Notification' in window)) return;
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') {
+        document.getElementById('notif-btn-wrap').textContent = 'Notifications enabled';
+        new Notification('D4 Advisor', { body: 'You will see item verdicts as notifications.' });
+      }
+    });
+  }
+
+  function showWebNotification(analysis) {
+    if (Notification.permission !== 'granted') return;
+    const verdict    = analysis.verdict ?? '?';
+    const name       = analysis.item_name ?? 'Unknown';
+    const score      = analysis.score ?? 0;
+    const upgrade    = analysis.upgrade_verdict ? ` | ${analysis.upgrade_verdict}` : '';
+    const crit       = analysis.is_critical_item ? ' | BUILD ENABLER' : '';
+    const title      = `${verdict}${upgrade} -- ${name} (${score}/10)${crit}`;
+    const body       = analysis.reasoning ?? '';
+    new Notification(title, { body: body.slice(0, 200) });
+  }
+
+  function connectSSE() {
+    const es = new EventSource(`${API}/events`);
+    es.addEventListener('analysis', e => {
+      const analysis = JSON.parse(e.data);
+      showWebNotification(analysis);
+      prependCard(analysis);
+      if (analysis.equippedUpdated && analysis.item_slot) {
+        equippedLoadout[analysis.item_slot] = {
+          item_name: analysis.item_name,
+          item_slot: analysis.item_slot,
+          item_power: equippedLoadout[analysis.item_slot]?.item_power ?? null,
+          affixes: [...(analysis.affixes_good || []), ...(analysis.affixes_bad || [])],
+          scannedAt: analysis.timestamp ?? Date.now(),
+        };
+        renderEquipGrid();
+      }
+    });
+    es.onerror = () => setTimeout(connectSSE, 5000);
+  }
+
+  loadSettings().then(() => {
+    // Collapse settings if already configured
+    const path = document.getElementById('screenshots-path').value;
+    const url  = document.getElementById('build-url-input').value;
+    if (path || url) document.getElementById('settings-body').style.display = 'none';
+  });
+  connectSSE();
+
+  // ── Equipment loadout ────────────────────────────────────────────────────
+  const D4_SLOTS = [
+    'Helm', 'Chest', 'Gloves', 'Pants', 'Boots',
+    'Amulet', 'Ring 1', 'Ring 2', 'Weapon', 'Offhand',
+  ];
+  let equippedLoadout = {};
+
+  async function loadEquipment() {
+    try {
+      const r = await fetch(`${API}/equipment`);
+      if (r.ok) { equippedLoadout = await r.json(); renderEquipGrid(); }
+    } catch {}
+  }
+
+  function renderEquipGrid() {
+    const grid = document.getElementById('equip-grid');
+    grid.innerHTML = D4_SLOTS.map(slot => {
+      const item = equippedLoadout[slot];
+      if (item) {
+        return `<div class="equip-slot populated" title="${escHtml(item.affixes?.join('\n') || '')}">
+          <div class="equip-slot-label">${escHtml(slot)} <button class="clear-btn" onclick="clearSlot('${escHtml(slot)}')">✕</button></div>
+          <div class="equip-slot-name">${escHtml(item.item_name)}</div>
+          ${item.item_power ? `<div class="equip-slot-power">iP ${item.item_power}</div>` : ''}
+        </div>`;
+      }
+      return `<div class="equip-slot">
+        <div class="equip-slot-label">${escHtml(slot)}</div>
+        <div class="equip-slot-empty">empty</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function scanEquipment() {
+    const btn = document.querySelector('.btn-scan');
+    btn.disabled = true; btn.textContent = '📷 Scanning…';
+    try {
+      const resp = await fetch(`${API}/equipment/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await resp.json();
+      if (data.error) { alert('Scan failed: ' + data.error); return; }
+      equippedLoadout = data.loadout;
+      renderEquipGrid();
+      updateStats(data.tokenStats);
+      btn.textContent = `📷 Scanned ${data.scanned} item${data.scanned !== 1 ? 's' : ''}`;
+      setTimeout(() => { btn.textContent = '📷 Scan Character Sheet'; }, 3000);
+    } catch (err) {
+      alert('Scan error: ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function saveAsEquipped(key, btn, explicitSlot = null) {
+    const item = pendingItems[key];
+    if (!item) { alert('Item data not found — try refreshing the page.'); return; }
+
+    let slot = explicitSlot ?? item.item_slot;
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    try {
+      const resp = await fetch(`${API}/equipment/slot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot, item: { ...item, item_slot: slot } }),
+      });
+      const data = await resp.json();
+      if (data.error) {
+        alert('Save failed: ' + data.error);
+        if (btn) { btn.disabled = false; btn.textContent = `Save as equipped in ${slot} slot`; }
+      } else {
+        equippedLoadout = data.loadout;
+        renderEquipGrid();
+        if (btn) { btn.textContent = `✓ Saved to ${slot} slot`; }
+      }
+    } catch (err) {
+      alert('Save error: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = `Save as equipped in ${slot} slot`; }
+    }
+  }
+
+  async function clearSlot(slot) {
+    try {
+      const resp = await fetch(`${API}/equipment/${encodeURIComponent(slot)}`, { method: 'DELETE' });
+      const data = await resp.json();
+      if (!data.error) { equippedLoadout = data.loadout; renderEquipGrid(); }
+    } catch {}
+  }
+
+  async function clearAllEquipment() {
+    if (!confirm('Clear all equipped items?')) return;
+    try {
+      const resp = await fetch(`${API}/equipment`, { method: 'DELETE' });
+      const data = await resp.json();
+      equippedLoadout = data.loadout;
+      renderEquipGrid();
+    } catch {}
+  }
+
+  loadEquipment();
+
+  // ── Wowhead search ───────────────────────────────────────────────────────
+  async function wowheadSearch() {
+    const q = document.getElementById('wowhead-input').value.trim();
+    if (!q) return;
+    const el = document.getElementById('wowhead-results');
+    el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0;">Searching…</div>`;
+    try {
+      const resp = await fetch(`${API}/wowhead?q=${encodeURIComponent(q)}`);
+      const data = await resp.json();
+      if (data.error) { el.innerHTML = `<div class="error-box">${escHtml(data.error)}</div>`; return; }
+      const results = data.results || [];
+      if (!results.length) {
+        el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0;">No results for "${escHtml(q)}"</div>`;
+        return;
+      }
+      const typeColor = t => t === 'aspect' ? 'var(--purple)' : t === 'item' ? 'var(--gold)' : t === 'skill' ? 'var(--blue)' : 'var(--muted)';
+      el.innerHTML = `
+        <div class="wowhead-results">
+          ${results.slice(0, 6).map(r => `
+            <div class="wowhead-result">
+              <div class="wowhead-result-name">${escHtml(r.name)}</div>
+              <div class="wowhead-result-type" style="color:${typeColor(r.type)}">${escHtml(r.type)}</div>
+              ${r.description ? `<div class="wowhead-result-desc">${escHtml(r.description)}</div>` : ''}
+            </div>`).join('')}
+        </div>
+        <div class="wowhead-source">Source: ${escHtml(data.source)}</div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="error-box">${escHtml(err.message)}</div>`;
+    }
+  }
+</script>
+</body>
+</html>
