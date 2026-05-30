@@ -4,7 +4,7 @@ A local AI overlay for Diablo 4 that analyzes item tooltips against your Maxroll
 
 Press PrintScreen in D4 → get a verdict in your browser within a few seconds.
 
-![screenshot placeholder](docs/screenshot.png)
+![D4 Item Advisor UI](docs/screenshot.png)
 
 ## What it does
 

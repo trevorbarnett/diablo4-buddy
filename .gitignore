@@ -6,3 +6,6 @@ screenshots/
 *.png
 *.jpg
 *.jpeg
+!docs/*.png
+!docs/*.jpg
+!docs/*.jpeg
