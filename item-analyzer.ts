@@ -356,8 +356,13 @@ export async function evaluateBuild(
   const activeBuild = (phase === 'PREPARING' && farmingBuild) ? farmingBuild : build;
 
   const slotLines = activeBuild.slots.length > 0
-    ? activeBuild.slots.map(s => `  ${s.slot}: ${s.affixes.join(', ')}`).join('\n')
+    ? activeBuild.slots.map(s => `  ${s.slot}: ${s.affixes.join(', ')}${s.notes ? ` [BiS: ${s.notes}]` : ''}`).join('\n')
     : '  (no slot data)';
+
+  const missingCritical = build.criticalItems.filter(i => !i.found);
+  const criticalNote = missingCritical.length > 0
+    ? `\nCRITICAL ITEMS STILL NEEDED (must-haves that enable the build — highest priority):\n${missingCritical.map(i => `  - ${i.name} [${i.slot}]: ${i.why}`).join('\n')}`
+    : '';
 
   const equippedLines = Object.values(equipped).map(item =>
     `  ${item.item_slot}: "${item.item_name}" — ${item.affixes.join(', ')}${item.item_power ? ` (iP ${item.item_power})` : ''}`
@@ -371,8 +376,10 @@ PHASE: ${phase}${phase === 'PREPARING' && farmingBuild ? ` (farming with "${farm
 
 PRIORITY AFFIXES BY SLOT:
 ${slotLines}
+${criticalNote}
 
 Evaluate every equipped slot against the priority affixes above. Be specific and actionable.
+For "obols_recommendation": if any critical items are still missing, ALWAYS recommend gambling the slot that could drop that item (e.g. if Kessime's Legacy [Pants] is missing, recommend gambling Pants at the Purveyor — this trumps any affix-based slot recommendation).
 
 OUTPUT: Valid JSON only, no markdown:
 {

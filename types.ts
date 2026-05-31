@@ -3,7 +3,7 @@
 export interface SlotPriority {
   slot: string;
   affixes: string[];
-  notes?: string;
+  notes?: string;  // e.g. BiS unique name for this slot
 }
 
 export interface FarmTarget {

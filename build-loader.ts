@@ -75,28 +75,72 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function extractSlotPriorities(text: string): SlotPriority[] {
-  const slots: SlotPriority[] = [];
-  const lines = text.split(/[\n.]+/).map(l => l.trim()).filter(Boolean);
-
-  for (const slot of D4_SLOTS) {
-    const slotIdx = lines.findIndex(l => l.toLowerCase().includes(slot.toLowerCase()));
-    if (slotIdx === -1) continue;
-
-    const window = lines.slice(slotIdx, slotIdx + 8).join(' ');
-    const affixes = KNOWN_AFFIXES.filter(a =>
-      window.toLowerCase().includes(a.toLowerCase())
-    );
-
-    if (affixes.length > 0) {
-      const normalizedSlot = slot.replace(/ [12]$/, '');
-      if (!slots.find(s => s.slot === normalizedSlot)) {
-        slots.push({ slot: normalizedSlot, affixes });
-      }
-    }
+function extractSearchMetadata(html: string): { items: string[]; skills: string[] } {
+  const match = html.match(/"search_metadata"\s*:\s*(\{[^}]+\})/);
+  if (!match) return { items: [], skills: [] };
+  try {
+    const meta = JSON.parse(match[1]);
+    return { items: meta.items ?? [], skills: meta.skills ?? [] };
+  } catch {
+    return { items: [], skills: [] };
   }
+}
 
-  return slots;
+function detectPhase(buildName: string): string {
+  const lower = buildName.toLowerCase();
+  if (lower.includes('push'))     return 'Push';
+  if (lower.includes('endgame'))  return 'Endgame';
+  if (lower.includes('midgame') || lower.includes('mid-game')) return 'Midgame';
+  if (lower.includes('starter') || lower.includes('leveling')) return 'Starter';
+  return 'Endgame'; // default assumption for a loaded build
+}
+
+async function extractSlotPriorities(text: string, cls: string, buildName: string, knownItems: string[] = []): Promise<SlotPriority[]> {
+  const phase = detectPhase(buildName);
+  const itemHint = knownItems.length > 0
+    ? `\nKNOWN ITEMS IN THIS BUILD: ${knownItems.join(', ')}\nUse these to identify which unique fills each slot and whether the weapon is 1H or 2H (e.g. Skullsplitter = bludgeoning 2H mace, Sword = slashing, Scythe = scythe).`
+    : '';
+  try {
+    const resp = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1200,
+      system: `You are a Diablo 4 build analyst extracting per-slot affix priorities from a build guide.
+
+PHASE TARGETING (critical):
+Many guides contain multiple gear phases: Starter, Midgame, Endgame, Push.
+You MUST extract slot data ONLY for the "${phase}" phase.
+If the text has a section labelled "${phase}" (or similar), use that section exclusively.
+Do NOT mix affixes or weapons from different phases.
+
+VALID SLOTS: Helm, Chest, Gloves, Pants, Boots, Amulet, Ring, Weapon, Offhand, Shield, Two-Handed Weapon, Bludgeoning Weapon, Slashing Weapon
+
+WEAPON TYPE RULES:
+- If the ${phase} phase uses a TWO-HANDED weapon, use "Two-Handed Weapon". Do NOT add Offhand or Shield.
+- If the ${phase} phase uses ONE-HANDED + offhand, use "Weapon" + "Offhand" (or "Shield") as separate slots.
+- If a specific unique weapon is named, include it in the "notes" field and use the correct slot type.
+${itemHint}
+
+For each slot list the 2–4 most important affixes in priority order. Use concise affix names (e.g. "Cooldown Reduction", "Critical Strike Chance", "Maximum Life").
+
+OUTPUT: Valid JSON array only, no markdown:
+[{"slot": "Helm", "affixes": ["Critical Strike Chance", "Cooldown Reduction", "Maximum Life"], "notes": "optional — e.g. BiS unique name"}]
+
+Return [] if you cannot determine slot priorities for the ${phase} phase.`,
+      messages: [{
+        role: 'user',
+        content: `Build: ${buildName} (${cls}) — extract ${phase} phase gear only.\n\nGuide text:\n${text.slice(0, 6000)}\n\nExtract ${phase} phase per-slot affix priorities.`,
+      }],
+    });
+
+    let raw = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '[]';
+    raw = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    const parsed = JSON.parse(raw) as SlotPriority[];
+    console.log(`[BuildLoader] ${phase} phase slots: ${parsed.map(s => s.slot).join(', ')}`);
+    return parsed;
+  } catch (err) {
+    console.error('[BuildLoader] Slot extraction failed:', err instanceof Error ? err.message : err);
+    return [];
+  }
 }
 
 function extractKeyStats(text: string): string[] {
@@ -209,8 +253,8 @@ export async function loadBuild(url: string): Promise<BuildConfig> {
 
   const cls = extractClass(html, url);
   const name = extractBuildName(html, url);
-  const slots = extractSlotPriorities(text);
   const keyStats = extractKeyStats(text);
+  const { items: knownItems } = extractSearchMetadata(html);
 
   // Preserve found-status from any previously loaded version of this build
   let existingFoundMap: Record<string, boolean> = {};
@@ -223,7 +267,12 @@ export async function loadBuild(url: string): Promise<BuildConfig> {
     }
   } catch { /* first load */ }
 
-  const criticalItems = await identifyCriticalItems(text, cls, name);
+  // Run slot extraction and critical items in parallel
+  const [slots, criticalItems] = await Promise.all([
+    extractSlotPriorities(text, cls, name, knownItems),
+    identifyCriticalItems(text, cls, name),
+  ]);
+
   // Restore found status if re-loading same build
   for (const item of criticalItems) {
     if (existingFoundMap[item.name] !== undefined) item.found = existingFoundMap[item.name];
@@ -237,7 +286,7 @@ export async function loadBuild(url: string): Promise<BuildConfig> {
     slots,
     keyStats,
     criticalItems,
-    rawText: text.slice(0, 4000),
+    rawText: text.slice(0, 6000),
   };
 
   await Bun.write(BUILD_JSON, JSON.stringify(build, null, 2));
@@ -267,8 +316,9 @@ export async function loadFarmingBuild(url: string): Promise<BuildConfig> {
 
   const cls   = extractClass(html, url);
   const name  = extractBuildName(html, url);
-  const slots = extractSlotPriorities(text);
   const keyStats = extractKeyStats(text);
+  const { items: knownItems } = extractSearchMetadata(html);
+  const slots = await extractSlotPriorities(text, cls, name, knownItems);
 
   const build: BuildConfig = {
     name,
@@ -278,7 +328,7 @@ export async function loadFarmingBuild(url: string): Promise<BuildConfig> {
     slots,
     keyStats,
     criticalItems: [],
-    rawText: text.slice(0, 4000),
+    rawText: text.slice(0, 6000),
   };
 
   await Bun.write(FARMING_BUILD_JSON, JSON.stringify(build, null, 2));
