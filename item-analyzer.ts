@@ -1,17 +1,23 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { BuildConfig, CriticalItem, EquippedItem, ItemAnalysis } from './types';
+import type { BuildConfig, CriticalItem, EquippedItem, EquippedLoadout, ItemAnalysis, BuildEvaluation, SlotEval } from './types';
 
 const client = new Anthropic();
 
 // ── System prompt ──────────────────────────────────────────────────────────
 
 function buildSystemPrompt(build: BuildConfig | null, farmingBuild: BuildConfig | null = null): string {
-  const mechSection = `DIABLO 4 ITEM MECHANICS:
+  const mechSection = `DIABLO 4 LORD OF HATRED ITEM MECHANICS:
 - Items have 1 implicit stat + 3-4 explicit affixes. Legendary Aspects are separate — ignore them as affix slots.
-- Tempering: adds 1–2 affixes from a class pool (2 temper slots per item). CAN fix a missing priority affix.
-- Masterworking: scales affix values ~5%/rank. Does NOT add new affixes.
-- Item Power: 900+ is endgame range. Matters for masterworking scaling.
-- Rerolling (Occultist): replaces one affix when 3/4 are right.
+- Greater Affixes (gold star icon on the affix line): roll at maximum value + a bonus on top. Flag these as highly valuable — they are the primary power driver on Ancestral gear.
+- Unique items no longer have guaranteed affixes — they roll from an affix pool like Legendaries, so two identical Uniques can have very different stats.
+- Talisman: new item slot. A Seal unlocks up to 6 Charm slots; Charms add affixes and powers and can form Set Bonuses. Evaluate Talisman Charms as a separate system, not as normal gear affixes.
+- Tempering: adds 1–2 affixes from a manual/category pool (2 temper slots). Now works on Uniques and Mythics. Tuning Prisms bias the result toward a stat type (Aggressive = offense, Protector's = defense, etc.). CAN fix a missing priority affix.
+- Masterworking: scales affix values up to 12 ranks. Now works on Uniques and Mythics. Does NOT add affixes.
+- Horadric Cube: the new primary crafting hub. Can add affixes to open slots, Focused Reroll (rerolls within same affix category — safer), Chaotic Reroll (changes affix category — risky), remove affixes, transmute rarity (Rare → Legendary, Common → Unique), recycle 3 identical Uniques into a refreshed version, and craft Unique Charms.
+- Enchanting (Occultist): rerolls one affix. Greater Affixes can be preserved by selecting them and choosing "No Change" — the gold star disappears visually but the Greater Affix stays on the item.
+- Transfiguration (via Horadric Cube): applies a powerful random bonus to a Legendary, Unique, or Mythic item — but permanently makes the item Unmodifiable. Entropic/Kullean Tuning Prisms guide outcomes. Only transfigure a near-finished item.
+- Item Power: 900+ is endgame/Ancestral range. Ancestral items (including Common/Magic/Rare) can roll Greater Affixes and continue dropping in all Torment tiers.
+- Damage affixes are now multiplicative — each damage affix compounds rather than adding flat percentages, making multiple damage affixes on one item more powerful than before.
 - Player is in PROGRESSION — evaluate as an intermediate step toward BiS, not perfection.`;
 
   const comparisonSection = `COMPARISON MODE (TWO TOOLTIPS):
@@ -336,4 +342,98 @@ export async function scanEquipment(imageBase64: string): Promise<EquippedItem[]
   } catch {
     return [];
   }
+}
+
+// ── Full build evaluation ───────────────────────────────────────────────────
+
+export async function evaluateBuild(
+  equipped: EquippedLoadout,
+  build: BuildConfig,
+  farmingBuild: BuildConfig | null = null,
+): Promise<BuildEvaluation> {
+  const missing  = build.criticalItems.filter(i => !i.found);
+  const phase    = missing.length === 0 ? 'OPTIMIZING' : 'PREPARING';
+  const activeBuild = (phase === 'PREPARING' && farmingBuild) ? farmingBuild : build;
+
+  const slotLines = activeBuild.slots.length > 0
+    ? activeBuild.slots.map(s => `  ${s.slot}: ${s.affixes.join(', ')}`).join('\n')
+    : '  (no slot data)';
+
+  const equippedLines = Object.values(equipped).map(item =>
+    `  ${item.item_slot}: "${item.item_name}" — ${item.affixes.join(', ')}${item.item_power ? ` (iP ${item.item_power})` : ''}`
+  ).join('\n');
+
+  const systemPrompt = `You are a Diablo 4 build advisor evaluating a player's complete equipped loadout.
+
+BUILD: ${activeBuild.name}
+CLASS: ${activeBuild.class}
+PHASE: ${phase}${phase === 'PREPARING' && farmingBuild ? ` (farming with "${farmingBuild.name}" toward "${build.name}")` : ''}
+
+PRIORITY AFFIXES BY SLOT:
+${slotLines}
+
+Evaluate every equipped slot against the priority affixes above. Be specific and actionable.
+
+OUTPUT: Valid JSON only, no markdown:
+{
+  "overall_score": 7,
+  "phase": "${phase}",
+  "summary": "2-3 sentences on overall build health and the single most impactful change",
+  "weakest_slots": ["worst slot", "second worst", "third worst"],
+  "slot_evals": [
+    {
+      "slot": "Helm",
+      "item_name": "item name",
+      "score": 5,
+      "hits": ["affixes that match build priority"],
+      "misses": ["missing or off-build affixes"],
+      "verdict": "BiS|Good|Upgrade needed|Replace ASAP",
+      "note": "one sentence — specific action or observation"
+    }
+  ],
+  "next_steps": ["top action item", "second action item", "third action item"],
+  "obols_recommendation": "Spend Obols at the Purveyor of Curiosities on [slot] — one sentence explaining why that slot gives the best return on gambling right now"
+}`;
+
+  const resp = await client.beta.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4000,
+    betas: ['prompt-caching-2024-07-31'],
+    system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+    messages: [{
+      role: 'user',
+      content: `Evaluate this equipped loadout:\n\n${equippedLines || '(no items equipped yet)'}`,
+    }],
+  });
+
+  trackUsage(resp.usage);
+
+  let text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '';
+  text = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+
+  // If the response was truncated mid-JSON, close any open structures so we
+  // can still parse what we got rather than failing entirely.
+  if (resp.stop_reason === 'max_tokens') {
+    console.warn('[Eval] Response hit max_tokens — attempting JSON recovery');
+    // Close any unclosed arrays/objects by counting brackets
+    let opens = 0;
+    for (const ch of text) {
+      if (ch === '{' || ch === '[') opens++;
+      else if (ch === '}' || ch === ']') opens--;
+    }
+    // Strip any trailing incomplete string or comma first
+    text = text.replace(/,?\s*"[^"]*$/, '').replace(/,\s*$/, '');
+    // Close open brackets in reverse order
+    const closers: string[] = [];
+    let d = 0;
+    for (const ch of text) {
+      if (ch === '{') { d++; closers.push('}'); }
+      else if (ch === '[') { d++; closers.push(']'); }
+      else if (ch === '}' || ch === ']') { d--; closers.pop(); }
+    }
+    text += closers.reverse().join('');
+  }
+
+  const parsed = JSON.parse(text) as Omit<BuildEvaluation, 'timestamp'>;
+  return { ...parsed, timestamp: Date.now() };
 }

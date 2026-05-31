@@ -184,6 +184,24 @@
     /* Settings collapsible */
     .settings-toggle { font-size: 10px; color: var(--muted); cursor: pointer; user-select: none; }
     .settings-toggle:hover { color: var(--muted2); }
+    /* Build evaluation card */
+    .eval-card { background: var(--panel); border: 1px solid rgba(91,156,246,.3); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+    .eval-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .eval-score { font-size:28px; font-weight:800; line-height:1; }
+    .eval-summary { font-size:12px; color:var(--muted2); line-height:1.5; }
+    .eval-slot-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:10px 0; }
+    .eval-slot-card { background:var(--panel2); border-radius:5px; padding:7px 9px; border-left:3px solid var(--border); }
+    .eval-slot-card.bis    { border-color:var(--green); }
+    .eval-slot-card.good   { border-color:var(--yellow); }
+    .eval-slot-card.needed { border-color:rgba(232,85,85,.7); }
+    .eval-slot-card.asap   { border-color:#ff4444; background:rgba(255,68,68,.06); }
+    .eval-slot-name { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:.05em; text-transform:uppercase; }
+    .eval-slot-item { font-size:11px; font-weight:600; color:var(--text); margin:2px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .eval-slot-score { font-size:10px; color:var(--muted); }
+    .eval-slot-note { font-size:10px; color:var(--muted2); line-height:1.4; margin-top:2px; }
+    .eval-next-steps { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+    .eval-step { font-size:11px; color:var(--muted2); padding:3px 0; display:flex; gap:6px; }
+    .eval-step-num { color:var(--blue); font-weight:700; flex-shrink:0; }
   </style>
 </head>
 <body>
@@ -234,6 +252,7 @@
       </div>
       <div class="equip-grid" id="equip-grid"></div>
       <div style="font-size:10px;color:var(--muted);margin-top:5px;">Items auto-save when you click "Save as equipped" on an analysis card.</div>
+      <button id="evaluate-build-btn" onclick="evaluateFullBuild()" style="margin-top:10px;width:100%;padding:8px;font-size:12px;font-weight:700;background:rgba(91,156,246,.12);color:var(--blue);border:1px solid rgba(91,156,246,.3);border-radius:5px;cursor:pointer;">Evaluate My Full Build</button>
     </div>
 
     <!-- Settings (collapsible) -->
@@ -618,9 +637,11 @@
     return el;
   }
 
-  function replacePlaceholder(el, data, errorMsg) {
+  function replacePlaceholder(el, data, errorMsg, cardType = 'item') {
     if (errorMsg) {
       el.outerHTML = `<div class="error-box">${escHtml(errorMsg)}</div>`;
+    } else if (cardType === 'eval') {
+      el.outerHTML = buildEvalCard(data);
     } else {
       el.outerHTML = buildCard(data);
     }
@@ -634,6 +655,49 @@
     const feed = getFeed();
     [...el.children].reverse().forEach(child => feed.prepend(child));
     updateFeedToolbar();
+  }
+
+  function buildEvalCard(data) {
+    const score = data.overall_score ?? 0;
+    const scoreColor = score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--yellow)' : 'var(--red)';
+    const ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '';
+
+    const verdictClass = v => {
+      if (v === 'BiS')           return 'bis';
+      if (v === 'Good')          return 'good';
+      if (v === 'Upgrade needed') return 'needed';
+      return 'asap';
+    };
+
+    const slotCards = (data.slot_evals || []).map(s => `
+      <div class="eval-slot-card ${verdictClass(s.verdict)}">
+        <div class="eval-slot-name">${escHtml(s.slot)}</div>
+        <div class="eval-slot-item" title="${escHtml(s.item_name)}">${escHtml(s.item_name)}</div>
+        <div class="eval-slot-score">${s.score}/10 · ${escHtml(s.verdict)}</div>
+        <div class="eval-slot-note">${escHtml(s.note)}</div>
+      </div>`).join('');
+
+    const steps = (data.next_steps || []).map((step, i) =>
+      `<div class="eval-step"><span class="eval-step-num">${i + 1}.</span><span>${escHtml(step)}</span></div>`
+    ).join('');
+
+    return `<div class="eval-card">
+      <div class="eval-header">
+        <div class="eval-score" style="color:${scoreColor}">${score}<span style="font-size:14px;color:var(--muted)">/10</span></div>
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:2px;">Build Evaluation <span style="font-size:10px;font-weight:400;color:var(--muted);">${escHtml(data.phase ?? '')} · ${ts}</span></div>
+          <div class="eval-summary">${escHtml(data.summary ?? '')}</div>
+        </div>
+      </div>
+      ${slotCards ? `<div class="eval-slot-grid">${slotCards}</div>` : ''}
+      ${steps ? `<div class="eval-next-steps">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">Next Steps</div>
+        ${steps}
+      </div>` : ''}
+      ${data.obols_recommendation ? `<div style="margin-top:10px;padding:8px 10px;background:rgba(232,183,62,.08);border:1px solid rgba(232,183,62,.25);border-radius:5px;">
+        <span style="font-size:10px;font-weight:700;color:var(--yellow);letter-spacing:.05em;text-transform:uppercase;">Purveyor of Curiosities · </span><span style="font-size:11px;color:var(--muted2);">${escHtml(data.obols_recommendation)}</span>
+      </div>` : ''}
+    </div>`;
   }
 
   function buildCard(data) {
@@ -956,6 +1020,23 @@
       const data = await resp.json();
       if (!data.error) { equippedLoadout = data.loadout; renderEquipGrid(); }
     } catch {}
+  }
+
+  async function evaluateFullBuild() {
+    const btn = document.getElementById('evaluate-build-btn');
+    btn.disabled = true; btn.textContent = 'Evaluating…';
+    const placeholder = prependPlaceholder();
+    try {
+      const resp = await fetch(`${API}/build/evaluate`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.error) { replacePlaceholder(placeholder, null, data.error); return; }
+      replacePlaceholder(placeholder, data, null, 'eval');
+      updateStats(data.tokenStats);
+    } catch (err) {
+      replacePlaceholder(placeholder, null, err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Evaluate My Full Build';
+    }
   }
 
   async function clearAllEquipment() {

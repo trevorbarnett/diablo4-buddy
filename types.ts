@@ -77,6 +77,31 @@ export interface EquippedItem {
 
 export type EquippedLoadout = Partial<Record<string, EquippedItem>>;
 
+// ── Build evaluation ───────────────────────────────────────────────────────
+
+export type SlotVerdict = 'BiS' | 'Good' | 'Upgrade needed' | 'Replace ASAP';
+
+export interface SlotEval {
+  slot: string;
+  item_name: string;
+  score: number;         // 0–10
+  hits: string[];        // affixes that match build priority
+  misses: string[];      // affixes not useful / missing
+  verdict: SlotVerdict;
+  note: string;          // one sentence
+}
+
+export interface BuildEvaluation {
+  overall_score: number;
+  phase: 'PREPARING' | 'OPTIMIZING';
+  summary: string;
+  weakest_slots: string[];   // ordered worst first
+  slot_evals: SlotEval[];
+  next_steps: string[];      // top 3 action items
+  obols_recommendation: string;  // what to gamble at Purveyor of Curiosities
+  timestamp: number;
+}
+
 // ── API payloads ───────────────────────────────────────────────────────────
 
 export interface LoadBuildRequest {

@@ -1,7 +1,7 @@
 import { mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBuild, getCurrentBuild, markCriticalItemFound, activateEndgameBuild, loadFarmingBuild, getFarmingBuild, clearFarmingBuild } from './build-loader';
-import { analyzeItem, scanEquipment, getTokenStats } from './item-analyzer';
+import { analyzeItem, scanEquipment, evaluateBuild, getTokenStats } from './item-analyzer';
 import { compressImageIfNeeded } from './image-utils';
 import { getLoadout, setSlot, clearSlot, clearAll } from './equipment-store';
 import { captureScreen } from './screenshot';
@@ -195,6 +195,21 @@ const server = Bun.serve({
       const build = await activateEndgameBuild();
       if (!build) return json({ error: 'No build loaded' }, 400);
       return json(build);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/build/evaluate') {
+      const build = await getCurrentBuild();
+      if (!build) return json({ error: 'No build loaded' }, 400);
+      const farmingBuild = await getFarmingBuild();
+      const equipped     = await getLoadout();
+      if (Object.keys(equipped).length === 0) return json({ error: 'No equipped items saved — scan your character sheet or save items from analysis cards first.' }, 400);
+      try {
+        const evaluation = await evaluateBuild(equipped, build, farmingBuild);
+        return json({ ...evaluation, tokenStats: getTokenStats() });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return json({ error: `Evaluation failed: ${msg}` }, 500);
+      }
     }
 
     // ── Screenshot ───────────────────────────────────────────────────────────
