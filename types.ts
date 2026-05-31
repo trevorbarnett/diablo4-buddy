@@ -91,6 +91,12 @@ export interface SlotEval {
   note: string;          // one sentence
 }
 
+export interface FarmingActivity {
+  activity: string;  // e.g. "Helltide", "The Pit — Tier 60+", "Kill Andariel (Torment 2)"
+  target: string;    // what you're hunting, e.g. "Helm upgrade", "Ring of Starless Skies"
+  tip: string;       // specific actionable tip
+}
+
 export interface BuildEvaluation {
   overall_score: number;
   phase: 'PREPARING' | 'OPTIMIZING';
@@ -99,6 +105,7 @@ export interface BuildEvaluation {
   slot_evals: SlotEval[];
   next_steps: string[];      // top 3 action items
   obols_recommendation: string;  // what to gamble at Purveyor of Curiosities
+  farming_plan: FarmingActivity[];  // prioritized content to run
   timestamp: number;
 }
 

@@ -392,7 +392,14 @@ OUTPUT: Valid JSON only, no markdown:
     }
   ],
   "next_steps": ["top action item", "second action item", "third action item"],
-  "obols_recommendation": "Spend Obols at the Purveyor of Curiosities on [slot] — one sentence explaining why that slot gives the best return on gambling right now"
+  "obols_recommendation": "Spend Obols at the Purveyor of Curiosities on [slot] — one sentence explaining why that slot gives the best return on gambling right now",
+  "farming_plan": [
+    {
+      "activity": "e.g. Helltide, The Pit — Tier 60+, Kill Andariel (Torment 2), Undercity, War Plans",
+      "target": "what you're hunting — specific item name or slot upgrade",
+      "tip": "one concrete tip: which chest type, which boss, which tier, what to look for on the ground"
+    }
+  ]
 }`;
 
   const resp = await client.beta.messages.create({
