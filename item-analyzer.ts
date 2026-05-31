@@ -13,12 +13,21 @@ function buildSystemPrompt(build: BuildConfig | null, farmingBuild: BuildConfig 
 - Talisman: new item slot. A Seal unlocks up to 6 Charm slots; Charms add affixes and powers and can form Set Bonuses. Evaluate Talisman Charms as a separate system, not as normal gear affixes.
 - Tempering: adds 1–2 affixes from a manual/category pool (2 temper slots). Now works on Uniques and Mythics. Tuning Prisms bias the result toward a stat type (Aggressive = offense, Protector's = defense, etc.). CAN fix a missing priority affix.
 - Masterworking: scales affix values up to 12 ranks. Now works on Uniques and Mythics. Does NOT add affixes.
-- Horadric Cube: the new primary crafting hub. Can add affixes to open slots, Focused Reroll (rerolls within same affix category — safer), Chaotic Reroll (changes affix category — risky), remove affixes, transmute rarity (Rare → Legendary, Common → Unique), recycle 3 identical Uniques into a refreshed version, and craft Unique Charms.
+- Horadric Cube: the new primary crafting hub. Can add affixes to open slots, Focused Reroll (rerolls within same affix category — safer), Chaotic Reroll (changes affix category — risky), remove affixes, transmute rarity (Rare → Legendary, Common → Unique), recycle 3 identical Uniques into a refreshed version, and craft Unique Charms. Amalgamation requires 5 of the same object.
 - Enchanting (Occultist): rerolls one affix. Greater Affixes can be preserved by selecting them and choosing "No Change" — the gold star disappears visually but the Greater Affix stays on the item.
-- Transfiguration (via Horadric Cube): applies a powerful random bonus to a Legendary, Unique, or Mythic item — but permanently makes the item Unmodifiable. Entropic/Kullean Tuning Prisms guide outcomes. Only transfigure a near-finished item.
+- Transfiguration (via Horadric Cube): applies a powerful random bonus to a Legendary, Unique, or Mythic item — but permanently makes the item Unmodifiable (no further crafting, tempering, or enchanting). Only transfigure a near-finished item.
 - Item Power: 900+ is endgame/Ancestral range. Ancestral items (including Common/Magic/Rare) can roll Greater Affixes and continue dropping in all Torment tiers.
 - Damage affixes are now multiplicative — each damage affix compounds rather than adding flat percentages, making multiple damage affixes on one item more powerful than before.
-- Player is in PROGRESSION — evaluate as an intermediate step toward BiS, not perfection.`;
+- Auto-Salvage has been disabled — all quality levels can roll Ancestral, so review items before salvaging.
+- Player is in PROGRESSION — evaluate as an intermediate step toward BiS, not perfection.
+
+ASPECT ACQUISITION (LORD OF HATRED — CRITICAL):
+- DUNGEONS NO LONGER AWARD ASPECTS. Do NOT advise running a specific dungeon to unlock an aspect — that system was removed in Lord of Hatred.
+- Aspects drop exclusively on Legendary items from any content: Helltides, Nightmare Dungeons, The Pit, Infernal Hordes, boss kills, loot caches, War Plans, etc.
+- To obtain a specific Aspect: farm Legendary drops from any high-density activity and salvage Legendaries at the Blacksmith. Salvaging automatically adds the Aspect to your Codex of Power at its rolled value.
+- Codex of Power permanently upgrades: if you salvage a Legendary with a higher-rolled version of an Aspect already in your Codex, the Codex updates to the better roll automatically.
+- Imprinting an Aspect from the Codex costs gold + Veiled Crystals (herbs drop Veiled Crystals now — loot any herb node except Angelbreath).
+- Some Legendary Aspects and Unique items from previous seasons may be deprecated/Legacy in Eternal realm — these cannot be crafted, modified, or used in the Horadric Cube.`;
 
   const comparisonSection = `COMPARISON MODE (TWO TOOLTIPS):
 If two item tooltips appear side-by-side:
@@ -377,6 +386,23 @@ PHASE: ${phase}${phase === 'PREPARING' && farmingBuild ? ` (farming with "${farm
 PRIORITY AFFIXES BY SLOT:
 ${slotLines}
 ${criticalNote}
+
+LORD OF HATRED FARMING KNOWLEDGE (apply to all farming_plan advice):
+ASPECTS: Dungeons NO LONGER award Aspects. Aspects drop on Legendary items from any content — salvage Legendaries at the Blacksmith to add them to the Codex of Power. To hunt a specific Aspect, farm high-density Legendary content and salvage drops.
+
+ACTIVITIES & WHAT THEY'RE BEST FOR:
+- War Plans: Chain up to 5 endgame activities with stacking modifiers. Modifiers carry over between activities — stack gold/elite-density modifiers early, unique drop rate + key modifiers later. Best overall loot loop (~80-120M gold + keys per 45-min chain). Recommended sequence: Helltide → Nightmare Dungeon → Pit Run → Undercity → Lair Boss.
+- Hatred Storms (Skovos Helltides): 90-min intervals, 30-min windows — cannot be farmed on-demand. High elite density + Aberrant Cinders. Use the Helltide slot in your War Plan to catch one.
+- Undercity: Pick a Bargain before entering — "Primordial Dust Bargain" for crafting mats (30-50 Enhanced Primordial Dust per run), "Equipment Bargain" for increased Unique drop rates. Horadric Seals from here sell for ~13M gold each.
+- Escalation Nightmare Dungeons: Combine 5 Nightmare Sigils in the Horadric Cube → Escalation Sigil. Self-sustaining loop with branching reward paths (gold / gems / keys / materials). Final boss Astaroth has a selectable affix that determines loot table. Generates enough Sigils to keep going.
+- The Pit: Main source of Greater Lair Keys (1-2 per session at high tiers). Also Primordial Dust.
+- Lair Bosses (targeted Unique/Mythic farming): Use Lair Keys (from Helltides/War Plans/Whispers) and Greater Lair Keys (from Pit/Escalation Dungeons).
+  - Duriel: strong loot table, manageable key cost
+  - Andariel: slightly faster kills, similar drop quality
+  - Harbinger of Hatred: expansion-exclusive Uniques ONLY available here
+  - Mephisto Echo: pinnacle difficulty, requires Crux of the False Prophet
+  - Mythic drop rate ≈ 2% per Greater Boss kill
+- Obols/Purveyor of Curiosities: Gamble by slot type. Best for targeting a specific equipment slot.
 
 Evaluate every equipped slot against the priority affixes above. Be specific and actionable.
 For "obols_recommendation": if any critical items are still missing, ALWAYS recommend gambling the slot that could drop that item (e.g. if Kessime's Legacy [Pants] is missing, recommend gambling Pants at the Purveyor — this trumps any affix-based slot recommendation).

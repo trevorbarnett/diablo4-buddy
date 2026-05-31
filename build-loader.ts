@@ -156,14 +156,14 @@ async function identifyCriticalItems(rawText: string, cls: string, buildName: st
   try {
     const resp = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 900,
-      system: `You are a Diablo 4 build analyst with deep knowledge of the game's item system, boss drop tables, Codex of Power, and progression path.
+      max_tokens: 1500,
+      system: `You are a Diablo 4 build analyst with deep knowledge of the game's item system, boss drop tables, Codex of Power, and progression path in the Lord of Hatred expansion.
 
 Extract the REQUIRED items AND aspects from a build guide. For each, provide accurate farming/acquisition information.
 
 CRITICAL DISTINCTION — get itemType right:
 - "unique_item": A specific named Unique (orange) item that drops from enemies/bosses. Has a unique 3D model. Examples: "Kessime's Legacy", "Bloodless Scream", "Howl from Below". Farmed by killing specific bosses or general Torment content.
-- "aspect": A Legendary Aspect from the Codex of Power or extracted from a Legendary. Examples: "Hematolagnia" (modifies Blood Wave), "Aspect of the Umbral". IMPORTANT: aspects are NOT dropped as items — they are either: (a) unlocked by completing a specific dungeon (Codex), or (b) extracted from a Legendary item that rolled with it. Do NOT treat aspects as boss-drop items.
+- "aspect": A Legendary Aspect (e.g. "Hematolagnia", "Aspect of the Umbral"). IMPORTANT: In Lord of Hatred, dungeons NO LONGER unlock aspects. Aspects drop exclusively on Legendary items from any content. Salvage Legendaries at the Blacksmith to add the aspect to your Codex of Power. Do NOT reference dungeon completion as a source.
 
 INCLUDE as critical:
 - Unique items without which the build's primary skill/mechanic cannot function
@@ -175,18 +175,29 @@ EXCLUDE:
 - Generic rare/magical items
 - "Nice to have" improvements
 
-D4 FARMING KNOWLEDGE:
+D4 LORD OF HATRED FARMING KNOWLEDGE:
 UNIQUE ITEMS:
 - Most: drop from any Torment 1+ content (world drops)
-- Boss-specific: Andariel → pants/boots/gloves, Duriel → chest/legs, Varshan → rings/amulets, Grigoire → armor, Beast in Ice → off-hand, Lord Zir → head
-- Uber Uniques: only from Tormented bosses / Uber Andariel / Uber Duriel
+- Boss-specific Lair Bosses (use Lair Keys from Helltides/War Plans/Whispers, Greater Lair Keys from The Pit):
+  - Andariel → pants/boots/gloves (also fast Mythic source)
+  - Duriel → chest/legs (strong loot table, good Mythic source)
+  - Harbinger of Hatred → expansion-exclusive Uniques ONLY available from this boss
+  - Varshan → rings/amulets
+  - Grigoire → armor
+  - Beast in Ice → off-hand
+  - Lord Zir → head
+  - Mephisto Echo → pinnacle boss, requires Crux of the False Prophet
+- Mythic Uniques: ~2% per Greater Boss kill (Duriel/Andariel best)
 - Helltide Mysterious Chests: target specific equipment slots
-- Gambling (Obols): target a slot by item type
+- Gambling (Obols/Purveyor of Curiosities): target a slot by item type
+- Undercity with Equipment Bargain: increased Unique drop rates (stack with War Plan modifiers)
 
-LEGENDARY ASPECTS (itemType = "aspect"):
-- Codex of Power: complete the specific dungeon once to unlock permanently. Check D4 Codex or Wowhead for dungeon name.
-- Extract from Legendary: use Occultist to extract from any Legendary that rolled with the aspect (destroys the item).
-- Imprint: use Occultist to imprint onto any Rare/Legendary item of the correct slot.
+LEGENDARY ASPECTS (itemType = "aspect") — LORD OF HATRED RULES:
+- Dungeons NO LONGER award aspects. Never reference a dungeon unlock.
+- Farm Legendary drops from any high-density content: Helltides, Nightmare Dungeons, The Pit, Infernal Hordes, War Plans, boss kills, loot caches.
+- Salvage Legendaries at the Blacksmith → aspect is added to Codex of Power at its rolled value.
+- Higher-rolled salvages automatically upgrade the Codex entry.
+- Imprint from Codex onto any Rare/Legendary of the correct slot (costs gold + Veiled Crystals).
 
 Torment tiers: Torment 1 ≈ level 60+, Torment 4 ≈ level 90+ strong gear.
 
@@ -200,7 +211,7 @@ OUTPUT: Valid JSON array only, no markdown:
   "why": "one sentence on how this enables the build",
   "found": false,
   "farm": {
-    "activity": "e.g. 'Kill Andariel' or 'Complete Anica\\'s Claim dungeon (Codex)' or 'Extract from Legendary or complete dungeon'",
+    "activity": "e.g. 'Kill Andariel' or 'Farm Legendary drops (Helltide / Nightmare Dungeon / War Plans), salvage at Blacksmith'",
     "tormentTier": "Torment 1+",
     "characterLevel": "60+",
     "pitTier": null,
@@ -215,6 +226,16 @@ OUTPUT: Valid JSON array only, no markdown:
 
     let text = resp.content[0].type === 'text' ? resp.content[0].text.trim() : '[]';
     text = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    if (resp.stop_reason === 'max_tokens') {
+      // Trim trailing incomplete object/string then close open brackets
+      text = text.replace(/,?\s*\{[^}]*$/, '').replace(/,\s*$/, '');
+      const closers: string[] = [];
+      for (const ch of text) {
+        if (ch === '[' || ch === '{') closers.push(ch === '[' ? ']' : '}');
+        else if (ch === ']' || ch === '}') closers.pop();
+      }
+      text += closers.reverse().join('');
+    }
     const raw = JSON.parse(text) as Partial<CriticalItem>[];
     const items: CriticalItem[] = raw.map(i => ({ itemType: 'unique_item' as CriticalItemType, ...i } as CriticalItem));
     console.log(`[BuildLoader] Critical items: ${items.map(i => `${i.name} [${i.itemType}] (${i.farm?.activity})`).join(', ')}`);
