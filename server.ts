@@ -44,6 +44,7 @@ let history: ItemAnalysis[] = [];
 loadHistory().then(h => { history = h; console.log(`[History] Loaded ${h.length} past analyses`); });
 
 async function addToHistory(analysis: ItemAnalysis) {
+  if (!analysis.item_found) { broadcast('analysis', analysis); return; }
   history = await appendHistory(analysis, history);
   broadcast('analysis', analysis);
 }

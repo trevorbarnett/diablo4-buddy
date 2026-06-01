@@ -579,6 +579,15 @@
   // ── Analyze ──────────────────────────────────────────────────────────────
   function handleAnalysisResult(placeholder, data) {
     replacePlaceholder(placeholder, data);
+    if (!data.item_found) {
+      const el = getFeed().querySelector('[data-autofade]');
+      if (el) setTimeout(() => {
+        el.style.transition = 'opacity 0.4s';
+        el.style.opacity = '0';
+        setTimeout(() => { el.remove(); updateFeedToolbar(); }, 400);
+      }, 3000);
+      return;
+    }
     updateStats(data.tokenStats);
     if (data.equippedUpdated && data.item_slot) {
       equippedLoadout[data.item_slot] = {
@@ -658,6 +667,14 @@
     const feed = getFeed();
     [...el.children].reverse().forEach(child => feed.prepend(child));
     updateFeedToolbar();
+    if (!data.item_found) {
+      const fading = feed.querySelector('[data-autofade]');
+      if (fading) setTimeout(() => {
+        fading.style.transition = 'opacity 0.4s';
+        fading.style.opacity = '0';
+        setTimeout(() => { fading.remove(); updateFeedToolbar(); }, 400);
+      }, 3000);
+    }
   }
 
   function buildEvalCard(data) {
@@ -715,7 +732,7 @@
   }
 
   function buildCard(data) {
-    if (!data.item_found) return `<div class="error-box">No item tooltip found in screenshot.</div>`;
+    if (!data.item_found) return `<div class="error-box" data-autofade>No item tooltip found in screenshot.</div>`;
 
     const score      = data.score ?? 0;
     const scoreColor = score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--yellow)' : 'var(--red)';
