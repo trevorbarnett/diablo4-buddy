@@ -307,7 +307,10 @@
     </div>
     <div id="feed-toolbar" style="display:none;justify-content:space-between;align-items:center;padding:2px 0 6px;">
       <span id="feed-count" style="font-size:11px;color:var(--muted);"></span>
-      <button id="collapse-btn" onclick="toggleCollapseAll()" style="width:auto;padding:4px 12px;font-size:11px;background:var(--panel2);color:var(--muted2);border:1px solid var(--border);border-radius:4px;">Collapse All</button>
+      <div style="display:flex;gap:6px;">
+        <button onclick="clearSalvageItems()" style="width:auto;padding:4px 12px;font-size:11px;background:var(--panel2);color:var(--red);border:1px solid rgba(232,85,85,.3);border-radius:4px;">Clear Salvage</button>
+        <button id="collapse-btn" onclick="toggleCollapseAll()" style="width:auto;padding:4px 12px;font-size:11px;background:var(--panel2);color:var(--muted2);border:1px solid var(--border);border-radius:4px;">Collapse All</button>
+      </div>
     </div>
     <div id="feed" style="display:flex;flex-direction:column;gap:10px;"></div>
   </div>
@@ -833,6 +836,16 @@
     document.querySelectorAll('#feed .result-body').forEach(el => {
       el.style.display = collapseAll ? 'none' : '';
     });
+    updateFeedToolbar();
+  }
+
+  async function clearSalvageItems() {
+    const cards = [...document.querySelectorAll('#feed .result-card')];
+    const salvageCards = cards.filter(c => c.querySelector('.verdict-SALVAGE'));
+    if (!salvageCards.length) return;
+    const r = await fetch(`${API}/history/salvage`, { method: 'DELETE' });
+    if (!r.ok) return;
+    salvageCards.forEach(c => c.remove());
     updateFeedToolbar();
   }
 

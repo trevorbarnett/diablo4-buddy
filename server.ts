@@ -7,7 +7,7 @@ import { getLoadout, setSlot, clearSlot, clearAll } from './equipment-store';
 import { captureScreen } from './screenshot';
 import { searchWowhead, fetchWowheadPage } from './wowhead-client';
 import { ScreenshotWatcher, normalizePath } from './screenshot-watcher';
-import { loadHistory, appendHistory } from './history-store';
+import { loadHistory, appendHistory, clearSalvageHistory } from './history-store';
 import type { EquippedItem, ItemAnalysis, LoadBuildRequest, AnalyzeRequest, MarkFoundRequest } from './types';
 
 const PORT = 4002;
@@ -328,7 +328,11 @@ const server = Bun.serve({
     }
 
     // ── History / Stats / Static ─────────────────────────────────────────────
-    if (req.method === 'GET' && url.pathname === '/history') return json(history);
+    if (req.method === 'GET'    && url.pathname === '/history') return json(history);
+    if (req.method === 'DELETE' && url.pathname === '/history/salvage') {
+      history = await clearSalvageHistory(history);
+      return json({ ok: true, remaining: history.length });
+    }
     if (req.method === 'GET' && url.pathname === '/stats')   return json(getTokenStats());
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
       return new Response(Bun.file('./public/index.html'));

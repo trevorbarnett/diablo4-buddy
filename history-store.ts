@@ -17,3 +17,9 @@ export async function appendHistory(item: ItemAnalysis, current: ItemAnalysis[])
   await Bun.write(HISTORY_JSON, JSON.stringify(next, null, 2));
   return next;
 }
+
+export async function clearSalvageHistory(current: ItemAnalysis[]): Promise<ItemAnalysis[]> {
+  const next = current.filter(i => i.verdict !== 'SALVAGE');
+  await Bun.write(HISTORY_JSON, JSON.stringify(next, null, 2));
+  return next;
+}
