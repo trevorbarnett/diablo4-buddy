@@ -530,7 +530,7 @@
     document.getElementById('critical-list').innerHTML = items.map(item => {
       const isAspect  = item.itemType === 'aspect';
       const typeBadge = `<span class="ci-type-badge ${isAspect ? 'ci-type-aspect' : 'ci-type-unique'}">${isAspect ? 'Aspect' : 'Unique'}</span>`;
-      return `<div class="critical-item ${item.found ? 'found' : ''}" onclick="toggleFound('${escHtml(item.name)}', ${!item.found})">
+      return `<div class="critical-item ${item.found ? 'found' : ''}" data-name="${escHtml(item.name)}" data-toggle="${!item.found}" onclick="toggleFound(this.dataset.name, this.dataset.toggle === 'true')">
         <div class="ci-check">${item.found ? '✓' : ''}</div>
         <div class="ci-body">
           <div class="ci-name" style="display:flex;align-items:center;gap:5px;">${escHtml(item.name)} ${typeBadge}</div>
@@ -585,7 +585,7 @@
         el.style.transition = 'opacity 0.4s';
         el.style.opacity = '0';
         setTimeout(() => { el.remove(); updateFeedToolbar(); }, 400);
-      }, 3000);
+      }, 15000);
       return;
     }
     updateStats(data.tokenStats);
@@ -673,7 +673,7 @@
         fading.style.transition = 'opacity 0.4s';
         fading.style.opacity = '0';
         setTimeout(() => { fading.remove(); updateFeedToolbar(); }, 400);
-      }, 3000);
+      }, 15000);
     }
   }
 
@@ -732,7 +732,12 @@
   }
 
   function buildCard(data) {
-    if (!data.item_found) return `<div class="error-box" data-autofade>No item tooltip found in screenshot.</div>`;
+    if (!data.item_found) {
+      const imgHtml = data.debugImage
+        ? `<img src="data:image/jpeg;base64,${data.debugImage}" style="max-width:100%;max-height:300px;object-fit:contain;border-radius:4px;margin-top:8px;display:block;">`
+        : '';
+      return `<div class="error-box" data-autofade>No item tooltip found in screenshot.${imgHtml}</div>`;
+    }
 
     const score      = data.score ?? 0;
     const scoreColor = score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--yellow)' : 'var(--red)';

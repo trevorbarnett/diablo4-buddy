@@ -63,6 +63,8 @@ export interface ItemAnalysis {
   upgrade_verdict: UpgradeVerdict | null;
   // Meta
   timestamp: number;
+  // Debug: only set when item_found=false, not persisted to history
+  debugImage?: string;
 }
 
 // ── Equipped loadout ───────────────────────────────────────────────────────

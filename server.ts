@@ -61,6 +61,7 @@ const watcher = new ScreenshotWatcher(async (imageBase64, filename, filepath) =>
     const final    = (!analysis.comparison_mode && stored)
       ? await analyzeItem(imageBase64, build, farmingBuild, stored)
       : analysis;
+    if (!final.item_found) final.debugImage = imageBase64;
     await addToHistory(final);
     console.log(`[Watcher] Done: ${final.item_name} → ${final.verdict}`);
 
@@ -257,8 +258,11 @@ const server = Bun.serve({
           equippedUpdated = true;
         }
 
-        addToHistory(final);
-        return json({ ...final, equippedUpdated, tokenStats: getTokenStats() });
+        // Save to history without broadcasting — the HTTP response delivers the result to the frontend directly.
+        // Broadcasting here would cause a duplicate card via the SSE listener.
+        if (final.item_found) { history = await appendHistory(final, history); }
+        const debugImage = !final.item_found ? imageBase64 : undefined;
+        return json({ ...final, equippedUpdated, tokenStats: getTokenStats(), debugImage });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[Server] Analysis failed:', msg);
